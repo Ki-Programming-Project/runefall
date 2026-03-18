@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RUNEFALL</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+:root {
+  --bg:#0a0812; --panel:#1a1528; --panel2:#221d35; --border:#2e2848;
+  --accent:#c9a84c; --accent2:#e8c96a; --red:#e05555; --green:#5ec95e;
+  --text:#e8e0f0; --text2:#9988bb;
+  --fire:#ff6633; --water:#3399ff; --wind:#66dd88;
+  --earth:#cc9944; --light:#ffdd44; --dark:#9944cc;
+  --safe: env(safe-area-inset-bottom, 0px);
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body {
+  width:100%; height:100%; overflow:hidden;
+  background:var(--bg); color:var(--text);
+  font-family:'Crimson Pro',Georgia,serif;
+}
+#app { width:100%; height:100%; }
+
+/* ── 画面切り替え: display のみ、position:absolute は一切使わない ── */
+.screen { display:none; flex-direction:column; width:100%; height:100%; }
+
+/* ── 共通レイアウト ── */
+.page-header {
+  flex-shrink:0; background:var(--panel); border-bottom:1px solid var(--border);
+  padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.page-scroll { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.page-body {
+  padding:16px 20px 24px; display:flex; flex-direction:column; gap:14px;
+  max-width:480px; margin:0 auto; width:100%;
+}
+.page-footer {
+  flex-shrink:0; background:var(--panel); border-top:1px solid var(--border);
+  padding:12px 20px calc(12px + var(--safe));
+  display:flex; justify-content:center; align-items:center; gap:12px;
+}
+.page-title { font-family:'Cinzel',serif; color:var(--accent); font-size:20px; }
+
+/* ── ボタン ── */
+.btn-primary, .btn-secondary, .btn-cast, .btn-skip {
+  border:none; cursor:pointer; font-family:'Cinzel',serif;
+  border-radius:4px; letter-spacing:0.1em;
+  user-select:none; -webkit-user-select:none;
+  touch-action:manipulation;
+}
+.btn-primary {
+  background:linear-gradient(135deg,#c9a84c,#e8c96a); color:#0a0812;
+  font-size:18px; font-weight:700; padding:14px 48px;
+  width:100%; max-width:280px; box-shadow:0 4px 20px rgba(201,168,76,0.4);
+}
+.btn-primary:active { opacity:0.85; }
+.btn-secondary {
+  background:transparent; color:var(--text2); font-size:15px;
+  padding:10px 32px; border:1px solid var(--border);
+  width:100%; max-width:280px;
+}
+.btn-secondary:active { background:var(--panel2); }
+
+/* ── タイトル ── */
+#screen-title { position:relative; justify-content:flex-end; align-items:center; }
+#title-canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+.title-content {
+  position:relative; z-index:10;
+  display:flex; flex-direction:column; align-items:center;
+  gap:16px; padding:0 32px calc(80px + var(--safe)) 32px; width:100%;
+}
+.title-logo { display:flex; align-items:center; gap:16px; }
+.title-logo h1 {
+  font-family:'Cinzel',serif; font-size:clamp(36px,10vw,52px); font-weight:900;
+  letter-spacing:0.2em; color:var(--accent2);
+  text-shadow:0 0 30px rgba(201,168,76,0.7),0 0 60px rgba(201,168,76,0.3);
+}
+.title-rune { font-size:28px; color:var(--accent); animation:pulse-rune 2s ease-in-out infinite; }
+.title-rune:last-child { animation-delay:1s; }
+@keyframes pulse-rune { 0%,100%{opacity:0.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.2)} }
+.title-sub { font-size:16px; color:var(--text2); letter-spacing:0.15em; font-style:italic; }
+
+/* ── 遊び方 ── */
+.howto-section {
+  display:flex; gap:16px; align-items:flex-start;
+  background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px;
+}
+.howto-icon { font-size:28px; flex-shrink:0; }
+.howto-section strong { display:block; color:var(--accent2); margin-bottom:4px; }
+.howto-section p { font-size:14px; color:var(--text2); line-height:1.5; }
+.combo-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:8px;
+  background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px;
+}
+.combo-item { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text2); }
+
+/* ── マップ ── */
+.stat-block { display:flex; align-items:center; gap:6px; flex:1; }
+.stat-block.center { justify-content:center; flex:0 0 auto; }
+.stat-block.right { justify-content:flex-end; }
+.stat-label { font-size:11px; color:var(--text2); letter-spacing:0.1em; white-space:nowrap; }
+.stat-val { font-size:13px; white-space:nowrap; }
+.gold-val { color:var(--accent); font-family:'Cinzel',serif; }
+.hp-bar-wrap { width:80px; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden; }
+.hp-bar { height:100%; background:linear-gradient(90deg,#e05555,#ff7755); border-radius:4px; transition:width 0.3s; width:100%; }
+.hp-bar.enemy { background:linear-gradient(90deg,#cc3333,#ff5533); }
+.floor-label { font-family:'Cinzel',serif; color:var(--accent); font-size:18px; }
+#map-canvas { flex:1; width:100%; min-height:0; display:block; touch-action:none; }
+.map-hint { font-size:13px; color:var(--text2); font-style:italic; }
+
+/* ── 戦闘 ── */
+.floor-badge {
+  background:var(--accent); color:#0a0812;
+  font-family:'Cinzel',serif; font-size:13px; font-weight:700;
+  padding:4px 10px; border-radius:12px;
+}
+.enemy-name-label { font-size:13px; color:var(--red); font-family:'Cinzel',serif; }
+.enemy-bar { width:70px; }
+#battle-canvas { flex:1; width:100%; min-height:0; display:block; touch-action:none; }
+.battle-ui {
+  flex-shrink:0; background:var(--panel); border-top:1px solid var(--border);
+  padding:10px 16px calc(10px + var(--safe));
+  display:flex; flex-direction:column; gap:8px;
+}
+.spell-preview {
+  display:flex; justify-content:space-between; align-items:center;
+  background:var(--panel2); border:1px solid var(--accent);
+  border-radius:6px; padding:8px 14px; visibility:visible;
+}
+.spell-preview.hidden { visibility:hidden; }
+#spell-name { font-family:'Cinzel',serif; color:var(--accent2); font-size:15px; }
+#spell-effect { font-size:13px; color:var(--text2); }
+.tile-hand { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+.tile {
+  width:52px; height:70px; border-radius:8px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  cursor:pointer; border:2px solid rgba(255,255,255,0.15);
+  position:relative; gap:4px; background:var(--panel2);
+  touch-action:manipulation;
+}
+.tile .tile-icon { font-size:24px; }
+.tile .tile-power { font-size:10px; color:rgba(255,255,255,0.5); }
+.tile.fire  { border-color:rgba(255,102,51,0.4);  box-shadow:inset 0 -3px 0 var(--fire);  }
+.tile.water { border-color:rgba(51,153,255,0.4);  box-shadow:inset 0 -3px 0 var(--water); }
+.tile.wind  { border-color:rgba(102,221,136,0.4); box-shadow:inset 0 -3px 0 var(--wind);  }
+.tile.earth { border-color:rgba(204,153,68,0.4);  box-shadow:inset 0 -3px 0 var(--earth); }
+.tile.light { border-color:rgba(255,221,68,0.4);  box-shadow:inset 0 -3px 0 var(--light); }
+.tile.dark  { border-color:rgba(153,68,204,0.4);  box-shadow:inset 0 -3px 0 var(--dark);  }
+.tile.selected {
+  transform:scale(1.1);
+  border-color:var(--accent2) !important;
+  box-shadow:0 0 16px rgba(201,168,76,0.7),inset 0 0 8px rgba(201,168,76,0.2) !important;
+}
+.tile.dimmed { opacity:0.35; }
+.tile:active { opacity:0.8; }
+.battle-actions { display:flex; gap:10px; }
+.btn-cast {
+  flex:1; background:linear-gradient(135deg,#c9a84c,#e8c96a);
+  color:#0a0812; font-size:17px; font-weight:700;
+  padding:14px; box-shadow:0 4px 16px rgba(201,168,76,0.4);
+}
+.btn-cast:disabled { background:var(--panel2); color:var(--text2); box-shadow:none; cursor:not-allowed; }
+.btn-cast:not(:disabled):active { opacity:0.85; }
+.btn-skip {
+  background:transparent; color:var(--text2);
+  border:1px solid var(--border); font-size:14px; padding:14px 20px;
+}
+
+/* ── 報酬・ショップ・休憩・宝箱 ── */
+.reward-tiles { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+.reward-tile {
+  width:72px; height:96px; border-radius:10px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  cursor:pointer; background:var(--panel2); border:2px solid var(--border); gap:6px;
+  touch-action:manipulation;
+}
+.reward-tile:active { border-color:var(--accent); opacity:0.85; }
+.reward-tile .tile-icon { font-size:32px; }
+.reward-tile .tile-name { font-size:11px; color:var(--text2); }
+.reward-tile .tile-pow  { font-size:12px; color:var(--accent); }
+.gold-disp { font-size:16px; color:var(--accent); }
+.rest-icon { font-size:72px; }
+.treasure-amount { font-family:'Cinzel',serif; font-size:48px; color:var(--accent); text-shadow:0 0 20px rgba(201,168,76,0.7); }
+
+/* ── ショップタブ ── */
+.shop-tab-bar {
+  flex-shrink:0; display:flex; background:var(--panel); border-bottom:1px solid var(--border);
+}
+.shop-tab {
+  flex:1; padding:10px 0; text-align:center; font-family:'Cinzel',serif;
+  font-size:12px; color:var(--text2); cursor:pointer; background:transparent;
+  border:none; letter-spacing:0.05em; touch-action:manipulation;
+  border-bottom:2px solid transparent;
+}
+.shop-tab.active { color:var(--accent2); border-bottom-color:var(--accent); }
+.shop-tab-content { display:none; }
+.shop-tab-content.active { display:flex; flex-direction:column; gap:10px; }
+.upgrade-item {
+  display:flex; align-items:center; gap:12px;
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:8px; padding:12px 14px; cursor:pointer;
+  touch-action:manipulation;
+}
+.upgrade-item:active { border-color:var(--accent); }
+.upgrade-item.maxed { opacity:0.4; cursor:not-allowed; }
+.upgrade-item.cant-afford { opacity:0.5; }
+.upgrade-icon { font-size:26px; flex-shrink:0; }
+.upgrade-info { flex:1; }
+.upgrade-name { font-family:'Cinzel',serif; font-size:13px; color:var(--accent2); }
+.upgrade-desc { font-size:12px; color:var(--text2); margin-top:2px; }
+.upgrade-level { font-size:11px; color:var(--text2); margin-top:3px; }
+.upgrade-cost { font-family:'Cinzel',serif; font-size:14px; color:var(--accent); white-space:nowrap; }
+
+/* ── デッキ確認 ── */
+.deck-section-label { font-size:11px; color:var(--text2); letter-spacing:0.12em; text-transform:uppercase; }
+.deck-total { font-size:13px; color:var(--text2); }
+.deck-group {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px;
+}
+.deck-group-icon { font-size:28px; flex-shrink:0; }
+.deck-group-info { flex:1; }
+.deck-group-name { font-family:'Cinzel',serif; font-size:14px; color:var(--text); }
+.deck-group-count { font-size:12px; color:var(--text2); margin-top:2px; }
+.deck-group-bar-wrap { height:5px; background:rgba(255,255,255,0.08); border-radius:3px; margin-top:6px; overflow:hidden; }
+.deck-group-bar { height:100%; border-radius:3px; }
+.combo-hint { font-size:11px; display:flex; align-items:center; gap:4px; }
+.combo-hint.ok { color:#5ec95e; }
+.combo-hint.ng { color:#9988bb; }
+
+/* ── 難易度選択 ── */
+.diff-buttons { display:flex; flex-direction:column; gap:12px; width:100%; max-width:280px; }
+.btn-diff {
+  border:none; cursor:pointer; font-family:'Cinzel',serif;
+  border-radius:6px; padding:14px 24px; font-size:16px; font-weight:700;
+  letter-spacing:0.12em; touch-action:manipulation;
+  display:flex; justify-content:space-between; align-items:center;
+  width:100%; transition:opacity 0.15s;
+}
+.btn-diff:active { opacity:0.8; }
+.btn-diff.easy   { background:linear-gradient(135deg,#2a5a2a,#3d8b3d); color:#a8f0a8; border:1px solid #3d8b3d; }
+.btn-diff.normal { background:linear-gradient(135deg,#c9a84c,#e8c96a); color:#0a0812; }
+.btn-diff.hard   { background:linear-gradient(135deg,#7a1a1a,#cc3333); color:#ffaaaa; border:1px solid #cc3333; }
+.btn-diff .diff-label { font-size:18px; }
+.btn-diff .diff-hint  { font-size:11px; opacity:0.75; font-family:'Crimson Pro',serif; letter-spacing:0; }
+.best-score-row {
+  font-size:12px; color:var(--text2); text-align:center; margin-top:-4px;
+}
+.best-score-row span { color:var(--accent); font-family:'Cinzel',serif; }
+
+/* ── ランダムイベント ── */
+.event-card {
+  background:var(--panel2); border:1px solid var(--accent);
+  border-radius:12px; padding:20px; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+}
+.event-icon { font-size:52px; }
+.event-name { font-family:'Cinzel',serif; color:var(--accent2); font-size:18px; }
+.event-desc { font-size:14px; color:var(--text2); line-height:1.6; }
+.event-actions { display:flex; gap:10px; width:100%; justify-content:center; flex-wrap:wrap; }
+.btn-event-accept {
+  background:linear-gradient(135deg,#c9a84c,#e8c96a); color:#0a0812;
+  font-family:'Cinzel',serif; font-size:14px; font-weight:700;
+  border:none; border-radius:4px; padding:12px 28px; cursor:pointer;
+  touch-action:manipulation; letter-spacing:0.08em;
+}
+.btn-event-accept:active { opacity:0.85; }
+.btn-event-decline {
+  background:transparent; color:var(--text2); font-family:'Cinzel',serif;
+  font-size:14px; border:1px solid var(--border); border-radius:4px;
+  padding:12px 28px; cursor:pointer; touch-action:manipulation;
+}
+.btn-event-decline:active { background:var(--panel); }
+
+/* ── スコア表示（クリア・ゲームオーバー共通） ── */
+.score-board {
+  background:var(--panel2); border:1px solid var(--border);
+  border-radius:10px; padding:16px 24px; width:100%; max-width:300px;
+  display:flex; flex-direction:column; gap:8px;
+}
+.score-row { display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+.score-row .score-label { color:var(--text2); }
+.score-row .score-val   { color:var(--text); font-family:'Cinzel',serif; }
+.score-total {
+  border-top:1px solid var(--border); padding-top:8px; margin-top:4px;
+  font-size:20px; font-family:'Cinzel',serif; color:var(--accent2);
+  text-align:center; text-shadow:0 0 12px rgba(232,201,106,0.5);
+}
+.score-best { font-size:12px; color:var(--accent); text-align:center; margin-top:4px; }
+
+/* ── チュートリアルオーバーレイ ── */
+#tutorial-overlay {
+  display:none; position:fixed; inset:0; z-index:1000;
+  pointer-events:none;
+}
+#tutorial-overlay.active { display:block; }
+#tutorial-box {
+  position:absolute; bottom:0; left:0; right:0;
+  background:var(--panel); border-top:2px solid var(--accent);
+  padding:16px 20px calc(16px + var(--safe));
+  pointer-events:auto;
+}
+.tutorial-step { display:flex; flex-direction:column; gap:10px; }
+.tutorial-icon { font-size:28px; text-align:center; }
+.tutorial-msg {
+  font-size:15px; color:var(--text); line-height:1.6;
+  text-align:center;
+}
+.tutorial-progress {
+  display:flex; justify-content:center; gap:6px;
+}
+.tutorial-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--border);
+}
+.tutorial-dot.done { background:var(--accent); }
+#tutorial-overlay .btn-primary {
+  align-self:center; max-width:200px; font-size:15px; padding:10px 32px;
+}
+/* ハイライトリング */
+.tutorial-highlight {
+  position:fixed; border:2px solid var(--accent);
+  border-radius:8px; pointer-events:none; z-index:999;
+  box-shadow:0 0 0 2000px rgba(0,0,0,0.55);
+  transition:all 0.3s ease;
+}
+
+/* ── ゲームオーバー・クリア ── */
+#screen-gameover, #screen-clear { position:relative; justify-content:center; align-items:center; }
+#gameover-canvas, #clear-canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+.gameover-content, .clear-content {
+  position:relative; z-index:10;
+  display:flex; flex-direction:column; align-items:center; gap:20px; padding:24px;
+}
+.gameover-title { font-family:'Cinzel',serif; font-size:42px; color:var(--red); font-weight:900; text-shadow:0 0 30px rgba(224,85,85,0.7); }
+.gameover-floor { color:var(--text2); font-size:18px; }
+.clear-star { font-size:64px; animation:spin-star 3s linear infinite; }
+@keyframes spin-star { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+.clear-title { font-family:'Cinzel',serif; font-size:36px; color:var(--accent2); font-weight:900; }
+.clear-sub { color:var(--text2); font-size:18px; font-style:italic; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- タイトル画面 -->
+<div id="screen-title" class="screen">
+  <canvas id="title-canvas"></canvas>
+  <div class="title-content">
+    <div class="title-logo">
+      <span class="title-rune">✦</span><h1>RUNEFALL</h1><span class="title-rune">✦</span>
+    </div>
+    <p class="title-sub">呪文でダンジョンを切り拓け</p>
+    <div class="diff-buttons">
+      <button id="btn-easy"   class="btn-diff easy">  <span class="diff-label">EASY</span>  <span class="diff-hint">HP多め・敵弱め</span></button>
+      <button id="btn-normal" class="btn-diff normal"><span class="diff-label">NORMAL</span><span class="diff-hint">標準バランス</span></button>
+      <button id="btn-hard"   class="btn-diff hard">  <span class="diff-label">HARD</span>  <span class="diff-hint">手札5枚・敵強化</span></button>
+    </div>
+    <div class="best-score-row" id="title-best-scores"></div>
+    <button id="btn-howto" class="btn-secondary">遊び方</button>
+  </div>
+</div>
+
+<!-- 遊び方画面 -->
+<div id="screen-howto" class="screen">
+  <div class="page-header">
+    <h2 class="page-title">遊び方</h2>
+  </div>
+  <div class="page-scroll">
+    <div class="page-body">
+      <div class="howto-section"><div class="howto-icon">🎴</div><div><strong>タイルを選んで呪文を発動</strong><p>画面下のルーンタイルを1〜3枚選択。組み合わせによって異なる呪文が発動します。</p></div></div>
+      <div class="howto-section"><div class="howto-icon">⚔️</div><div><strong>敵を倒してフロアを進む</strong><p>敵を倒すと新しいタイルを獲得。フロアが深くなるほど強敵が出現します。</p></div></div>
+      <div class="howto-section"><div class="howto-icon">✨</div><div><strong>呪文コンボを狙え</strong><p>同じタイル3枚・属性の組み合わせで強力なコンボ呪文が発動！</p></div></div>
+      <div class="combo-grid">
+        <strong style="grid-column:1/-1;color:var(--accent2)">呪文一覧（一部）</strong>
+        <div class="combo-item">🔥🔥🔥 Inferno 15dmg</div>
+        <div class="combo-item">✨🌑 Eclipse 12dmg</div>
+        <div class="combo-item">💨💨💨 Tornado 12dmg</div>
+        <div class="combo-item">✨✨ Holy 回復18</div>
+        <div class="combo-item">🪨🪨 Boulder 10dmg</div>
+        <div class="combo-item">💧💨 Storm 8dmg+鈍化</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <button id="btn-howto-back" class="btn-secondary">戻る</button>
+  </div>
+</div>
+
+<!-- マップ画面 -->
+<div id="screen-map" class="screen">
+  <div class="page-header">
+    <div class="stat-block">
+      <span class="stat-label">HP</span>
+      <div class="hp-bar-wrap"><div id="map-hp-bar" class="hp-bar"></div></div>
+      <span id="map-hp-text" class="stat-val">80/80</span>
+    </div>
+    <div class="stat-block center"><span id="map-floor-label" class="floor-label">Floor 1</span></div>
+    <div class="stat-block right">
+      <span class="stat-label">Gold</span>
+      <span id="map-gold" class="stat-val gold-val">0</span>
+      <span class="stat-label" style="margin-left:8px">🎴</span>
+      <span id="map-deck" class="stat-val">12</span>
+    </div>
+  </div>
+  <canvas id="map-canvas"></canvas>
+  <div class="page-footer">
+    <span class="map-hint">部屋をタップして進む</span>
+    <button id="btn-open-deck" class="btn-secondary" style="max-width:140px;padding:8px 16px;font-size:12px">🎴 デッキ確認</button>
+  </div>
+</div>
+
+<!-- 戦闘画面 -->
+<div id="screen-battle" class="screen">
+  <div class="page-header">
+    <div class="stat-block">
+      <span class="stat-label">HP</span>
+      <div class="hp-bar-wrap"><div id="battle-hp-bar" class="hp-bar"></div></div>
+      <span id="battle-hp-text" class="stat-val">80/80</span>
+    </div>
+    <div id="floor-badge" class="floor-badge">F1</div>
+    <div class="stat-block right">
+      <span id="enemy-name" class="enemy-name-label">Slime</span>
+      <div class="hp-bar-wrap enemy-bar"><div id="enemy-hp-bar" class="hp-bar enemy"></div></div>
+      <span id="enemy-hp-text" class="stat-val">20/20</span>
+    </div>
+  </div>
+  <canvas id="battle-canvas"></canvas>
+  <div id="boss-alert" style="position:absolute;top:30%;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;color:#ff6633;font-size:16px;font-weight:700;text-align:center;pointer-events:none;opacity:0;transition:opacity 0.5s;z-index:50;text-shadow:0 0 10px rgba(255,100,0,0.8);white-space:nowrap;padding:8px 16px;background:rgba(10,8,18,0.7);border-radius:6px;border:1px solid #ff6633;"></div>
+  <div class="battle-ui">
+    <div id="spell-preview" class="spell-preview hidden">
+      <span id="spell-name">呪文名</span>
+      <span id="spell-effect">効果</span>
+    </div>
+    <div id="tile-hand" class="tile-hand"></div>
+    <div class="battle-actions">
+      <button id="btn-cast" class="btn-cast" disabled>詠唱</button>
+      <button id="btn-skip" class="btn-skip">スキップ</button>
+    </div>
+  </div>
+</div>
+
+<!-- 報酬画面 -->
+<div id="screen-reward" class="screen">
+  <div class="page-header">
+    <h2 id="reward-title" class="page-title">勝利！</h2>
+    <p id="reward-sub" style="font-size:13px;color:var(--text2)">タイルを1枚獲得</p>
+  </div>
+  <div class="page-scroll">
+    <div class="page-body" style="align-items:center;padding-top:32px">
+      <div id="reward-tiles" class="reward-tiles"></div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <button id="btn-reward-skip" class="btn-secondary">スキップ</button>
+  </div>
+</div>
+
+<!-- ショップ画面 -->
+<div id="screen-shop" class="screen">
+  <div class="page-header">
+    <h2 class="page-title">🏪 魔法商店</h2>
+    <span class="gold-val" style="font-family:'Cinzel',serif;font-size:14px">Gold: <span id="shop-gold">0</span></span>
+  </div>
+  <div class="shop-tab-bar">
+    <button class="shop-tab active" id="shop-tab-tiles" onclick="switchShopTab('tiles')">タイル購入</button>
+    <button class="shop-tab" id="shop-tab-upgrades" onclick="switchShopTab('upgrades')">ステータス強化</button>
+  </div>
+  <div class="page-scroll">
+    <div class="page-body">
+      <div id="shop-content-tiles" class="shop-tab-content active">
+        <div id="shop-tiles" class="reward-tiles" style="justify-content:flex-start"></div>
+      </div>
+      <div id="shop-content-upgrades" class="shop-tab-content">
+        <div id="upgrade-list"></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <button id="btn-shop-leave" class="btn-secondary">出発</button>
+  </div>
+</div>
+
+<!-- デッキ確認画面 -->
+<div id="screen-deck" class="screen">
+  <div class="page-header">
+    <h2 class="page-title">🎴 デッキ</h2>
+    <span id="deck-total" class="deck-total">計12枚</span>
+  </div>
+  <div class="page-scroll">
+    <div class="page-body">
+      <span class="deck-section-label">属性構成</span>
+      <div id="deck-groups"></div>
+      <span class="deck-section-label" style="margin-top:4px">コンボヒント</span>
+      <div id="deck-combos" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <button id="btn-deck-back" class="btn-secondary" style="max-width:140px">マップへ戻る</button>
+    <button id="btn-deck-to-shop" class="btn-secondary" style="max-width:140px">🏪 ショップへ</button>
+  </div>
+</div>
+
+<!-- 休憩画面 -->
+<div id="screen-rest" class="screen">
+  <div class="page-header"><h2 class="page-title">🏕️ 休憩所</h2></div>
+  <div class="page-scroll">
+    <div class="page-body" style="align-items:center;gap:20px;padding-top:40px">
+      <div class="rest-icon">💤</div>
+      <p style="color:var(--text2)">体力を30回復しました</p>
+    </div>
+  </div>
+  <div class="page-footer"><button id="btn-rest-leave" class="btn-primary">出発</button></div>
+</div>
+
+<!-- 宝箱画面 -->
+<div id="screen-treasure" class="screen">
+  <div class="page-header"><h2 class="page-title">💎 宝箱</h2></div>
+  <div class="page-scroll">
+    <div class="page-body" style="align-items:center;gap:16px;padding-top:40px">
+      <div id="treasure-amount" class="treasure-amount">+30G</div>
+      <p style="color:var(--text2)">Gold を獲得！</p>
+    </div>
+  </div>
+  <div class="page-footer"><button id="btn-treasure-leave" class="btn-primary">持ち去る</button></div>
+</div>
+
+<!-- ランダムイベント画面 -->
+<div id="screen-event" class="screen">
+  <div class="page-header"><h2 class="page-title">⚡ イベント</h2></div>
+  <div class="page-scroll">
+    <div class="page-body" style="align-items:center;padding-top:20px">
+      <div class="event-card">
+        <div class="event-icon" id="event-icon">🌟</div>
+        <div class="event-name" id="event-name">祝福の泉</div>
+        <div class="event-desc" id="event-desc">説明</div>
+      </div>
+      <div class="event-actions">
+        <button id="btn-event-accept"  class="btn-event-accept">受け入れる</button>
+        <button id="btn-event-decline" class="btn-event-decline">断る</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ゲームオーバー画面 -->
+<div id="screen-gameover" class="screen">
+  <canvas id="gameover-canvas"></canvas>
+  <div class="gameover-content">
+    <h2 class="gameover-title">GAME OVER</h2>
+    <p id="gameover-floor" class="gameover-floor">Floor 3 まで到達</p>
+    <div id="gameover-scoreboard" class="score-board"></div>
+    <button id="btn-retry" class="btn-primary">再挑戦</button>
+    <button id="btn-title" class="btn-secondary">タイトルへ</button>
+  </div>
+</div>
+
+<!-- クリア画面 -->
+<div id="screen-clear" class="screen">
+  <canvas id="clear-canvas"></canvas>
+  <div class="clear-content">
+    <div class="clear-star">⭐</div>
+    <h2 class="clear-title">DUNGEON CLEAR!</h2>
+    <p class="clear-sub">魔竜を討伐した！</p>
+    <div id="clear-scoreboard" class="score-board"></div>
+    <button id="btn-clear-retry" class="btn-primary">再挑戦</button>
+    <button id="btn-clear-title" class="btn-secondary">タイトルへ</button>
+  </div>
+</div>
+
+</div><!-- #app -->
+
+<!-- チュートリアルオーバーレイ（#appの外に配置） -->
+<div id="tutorial-overlay">
+  <div class="tutorial-highlight" id="tutorial-highlight"></div>
+  <div id="tutorial-box">
+    <div class="tutorial-step">
+      <div class="tutorial-icon" id="tutorial-icon">🎴</div>
+      <div class="tutorial-msg" id="tutorial-msg">メッセージ</div>
+      <div class="tutorial-progress" id="tutorial-progress"></div>
+      <button id="btn-tutorial-next" class="btn-primary" style="align-self:center;max-width:200px;font-size:15px;padding:10px 32px">次へ</button>
+    </div>
+  </div>
+</div>
+<script>
+'use strict';
+
+const TILE_DEFS = [
+  { id:'fire',  icon:'🔥', name:'炎',  power:3, color:'#ff6633' },
+  { id:'water', icon:'💧', name:'水',  power:2, color:'#3399ff' },
+  { id:'wind',  icon:'💨', name:'風',  power:2, color:'#66dd88' },
+  { id:'earth', icon:'🪨', name:'土',  power:4, color:'#cc9944' },
+  { id:'light', icon:'✨', name:'光',  power:2, color:'#ffdd44' },
+  { id:'dark',  icon:'🌑', name:'闇',  power:3, color:'#9944cc' },
+];
+
+const SPELL_COMBOS = [
+  { key:'fire,fire,fire',  name:'Inferno',    dmg:15, heal:0,  effect:'burn',   desc:'敵を燃焼させる' },
+  { key:'wind,wind,wind',  name:'Tornado',    dmg:12, heal:0,  effect:'sweep',  desc:'全体を吹き飛ばす' },
+  { key:'earth,earth',     name:'Boulder',    dmg:10, heal:0,  effect:'stun',   desc:'敵を気絶させる' },
+  { key:'light,light',     name:'Holy Light', dmg:0,  heal:18, effect:'heal',   desc:'HPを18回復' },
+  { key:'dark,light',      name:'Eclipse',    dmg:12, heal:0,  effect:'curse',  desc:'呪いをかける' },
+  { key:'water,wind',      name:'Storm',      dmg:8,  heal:0,  effect:'slow',   desc:'敵を鈍化させる' },
+  { key:'fire,water',      name:'Steam',      dmg:6,  heal:0,  effect:'blind',  desc:'敵を盲目にする' },
+  { key:'earth,light',     name:'Gaia Beam',  dmg:11, heal:0,  effect:'pierce', desc:'防御を貫通する' },
+  { key:'dark,fire',       name:'Hellfire',   dmg:13, heal:0,  effect:'burn',   desc:'地獄の炎' },
+  { key:'water,water',     name:'Flood',      dmg:9,  heal:4,  effect:'wet',    desc:'少し回復する' },
+  { key:'dark,dark,dark',  name:'Abyss',      dmg:18, heal:0,  effect:'curse',  desc:'深淵の力' },
+];
+
+const UPGRADE_DEFS = [
+  { id:'hp_up',   name:'体力強化',   icon:'❤️', baseCost:20, maxLv:3, desc:lv=>`最大HP +${lv*20}`,    apply:(G,lv)=>{ G.player.maxHp=G.diffConf.playerHp+lv*20; G.player.hp=Math.min(G.player.hp,G.player.maxHp); } },
+  { id:'atk_up',  name:'攻撃強化',   icon:'⚔️', baseCost:25, maxLv:3, desc:lv=>`全ダメージ +${lv*2}`, apply:(G,lv)=>{ G.player.atkBonus=lv*2; } },
+  { id:'heal_up', name:'回復強化',   icon:'💚', baseCost:20, maxLv:2, desc:lv=>`回復量 +${lv*6}`,     apply:(G,lv)=>{ G.player.healBonus=lv*6; } },
+  { id:'gold_up', name:'財宝の加護', icon:'💰', baseCost:15, maxLv:2, desc:lv=>`Gold獲得 +${lv*30}%`, apply:(G,lv)=>{ G.player.goldRate=G.diffConf.goldMult+lv*0.3; } },
+  { id:'hand_up', name:'手札拡張',   icon:'🎴', baseCost:30, maxLv:2, desc:lv=>`手札 +${lv}枚`,       apply:(G,lv)=>{ G.player.handSize=G.diffConf.handSize+lv; } },
+];
+
+const COMBO_HINTS = [
+  { name:'Inferno',    id:'fire',  need:3 },
+  { name:'Tornado',    id:'wind',  need:3 },
+  { name:'Abyss',      id:'dark',  need:3 },
+  { name:'Boulder',    id:'earth', need:2 },
+  { name:'Holy Light', id:'light', need:2 },
+  { name:'Eclipse',    id:'dark',  need:1, id2:'light', need2:1 },
+  { name:'Storm',      id:'water', need:1, id2:'wind',  need2:1 },
+  { name:'Hellfire',   id:'dark',  need:1, id2:'fire',  need2:1 },
+];
+
+const ENEMIES = [
+  { name:'スライム',   icon:'🟢', maxHp:18,  atk:3,  gold:8  },
+  { name:'ゴブリン',   icon:'👺', maxHp:28,  atk:5,  gold:12 },
+  { name:'スケルトン', icon:'💀', maxHp:38,  atk:7,  gold:16 },
+  { name:'オーガ',     icon:'👹', maxHp:52,  atk:10, gold:22 },
+  { name:'魔竜',       icon:'🐉', maxHp:90,  atk:14, gold:60 },
+];
+
+const DIFFICULTIES = {
+  easy:   { label:'EASY',   atkMult:0.7, hpMult:0.8, playerHp:100, handSize:6, deckLimit:999, goldMult:1.2, spellComboKey:'runefall_best_easy'   },
+  normal: { label:'NORMAL', atkMult:1.0, hpMult:1.0, playerHp:80,  handSize:6, deckLimit:999, goldMult:1.0, spellComboKey:'runefall_best_normal' },
+  hard:   { label:'HARD',   atkMult:1.2, hpMult:1.1, playerHp:65,  handSize:5, deckLimit:20,  goldMult:0.8, spellComboKey:'runefall_best_hard'   },
+};
+
+const RANDOM_EVENTS = [
+  {
+    id:'blessing', icon:'🌟', name:'祝福の泉',
+    desc:'手持ちタイルを1枚選んでパワーを+1強化します。',
+    canDecline:true,
+    onAccept(G) {
+      // 報酬画面を流用してタイル選択
+      const choices = [...new Map(G.deck.map(t=>[t.id,t])).values()];
+      buildRewardTiles('reward-tiles', choices.slice(0,4), tile => {
+        G.deck.forEach(t => { if(t.id===tile.id) t.power++; });
+        showScreen('map');
+      });
+      document.getElementById('reward-title').textContent = '🌟 祝福の泉';
+      document.getElementById('reward-sub').textContent   = '強化するタイルを1枚選択';
+      showScreen('reward');
+    },
+  },
+  {
+    id:'curse', icon:'💀', name:'呪いの祭壇',
+    desc:`HP-20と引き換えに、強力なタイルを1枚入手します。`,
+    canDecline:true,
+    onAccept(G) {
+      G.player.hp = Math.max(1, G.player.hp - 20);
+      const pool = shuffle([...TILE_DEFS]).slice(0,3);
+      buildRewardTiles('reward-tiles', pool, tile => { G.deck.push({...tile}); showScreen('map'); });
+      document.getElementById('reward-title').textContent = '💀 呪いの代償';
+      document.getElementById('reward-sub').textContent   = 'タイルを1枚獲得（HP-20済）';
+      showScreen('reward');
+    },
+  },
+  {
+    id:'gamble', icon:'🎲', name:'運命の賭け',
+    desc:'50%の確率でHPが全回復。残り50%でHP半減。',
+    canDecline:true,
+    onAccept(G) {
+      if (Math.random() < 0.5) {
+        G.player.hp = G.player.maxHp;
+      } else {
+        G.player.hp = Math.max(1, Math.floor(G.player.hp / 2));
+      }
+      showScreen('map');
+    },
+  },
+  {
+    id:'merchant', icon:'🧙', name:'旅の魔術師',
+    desc:'デッキからランダムなタイル1枚を、別の属性に変換します。',
+    canDecline:true,
+    onAccept(G) {
+      if (G.deck.length === 0) { showScreen('map'); return; }
+      const idx = Math.floor(Math.random() * G.deck.length);
+      const newType = TILE_DEFS[Math.floor(Math.random() * TILE_DEFS.length)];
+      G.deck[idx] = { ...newType };
+      showScreen('map');
+    },
+  },
+];
+
+const ROOM_TYPES = ['enemy','enemy','enemy','shop','treasure','rest','event'];
+const DUNGEON_FLOORS = 8;
+const SHOP_PRICE = 15;
+const MAX_SELECTED = 3;
+
+let G = {};
+let currentDifficulty = 'normal';
+
+function initGame(diffKey = currentDifficulty) {
+  currentDifficulty = diffKey;
+  const d = DIFFICULTIES[diffKey] || DIFFICULTIES.normal;
+  G = {
+    screen:'title',
+    floor:1,
+    difficulty: diffKey,
+    diffConf: d,
+    player:{ hp:d.playerHp, maxHp:d.playerHp, gold:0, atkBonus:0, healBonus:0, goldRate:d.goldMult, handSize:d.handSize },
+    upgradeLevels:{ hp_up:0, atk_up:0, heal_up:0, gold_up:0, hand_up:0 },
+    deck: buildStartDeck(),
+    hand:[], selected:[], enemy:null, enemyEffects:[],
+    dungeon:generateDungeon(), currentRoom:null,
+    animating:false, particles:[],
+    mapRooms:[], mapCurrentIdx:0,
+    totalTurns:0,
+    spellComboBonus:{}, // 古代の書庫用：呪文キー→追加ダメージ
+  };
+}
+
+function buildStartDeck() {
+  const d = [];
+  for (const t of TILE_DEFS) d.push({...t},{...t});
+  return shuffle(d);
+}
+
+function generateDungeon() {
+  return Array.from({length:DUNGEON_FLOORS},(_,i)=>({
+    type: i===DUNGEON_FLOORS-1 ? 'boss' : ROOM_TYPES[Math.floor(Math.random()*ROOM_TYPES.length)],
+    cleared:false
+  }));
+}
+
+function shuffle(arr) {
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+
+function drawHand() {
+  G.hand = shuffle([...G.deck]).slice(0, G.player.handSize);
+  G.selected = [];
+}
+
+function resolveSpell(ids) {
+  const key = [...ids].sort().join(',');
+  const combo = SPELL_COMBOS.find(c=>c.key===key);
+  if (combo) return {...combo};
+  const baseDmg = ids.reduce((s,id)=>s+(TILE_DEFS.find(t=>t.id===id)?.power||1),0);
+  return { name:'基本攻撃', dmg:baseDmg, heal:0, effect:null, desc:`${baseDmg}ダメージ` };
+}
+
+// ── 画面遷移: display のみで制御、position:absolute / opacity 一切なし ──
+function showScreen(id) {
+  // 全Canvasアニメーションを一律停止してから画面を切り替える
+  if (titleRaf)  { cancelAnimationFrame(titleRaf);  titleRaf=null;  }
+  if (battleRaf) { cancelAnimationFrame(battleRaf); battleRaf=null; }
+  if (goRaf)     { cancelAnimationFrame(goRaf);     goRaf=null;     }
+  if (clearRaf)  { cancelAnimationFrame(clearRaf);  clearRaf=null;  }
+  if (shakeRaf)  { cancelAnimationFrame(shakeRaf);  shakeRaf=null;
+    const el = document.getElementById('screen-battle');
+    if (el) el.style.transform = '';
+  }
+
+  document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
+  const next = document.getElementById('screen-' + id);
+  if (!next) return;
+  next.style.display = 'flex';
+  G.screen = id;
+  onScreenEnter(id);
+}
+
+function onScreenEnter(id) {
+  if (id==='title')    { initTitleCanvas(); updateTitleBestScores(); }
+  if (id==='map')      renderMap();
+  if (id==='battle')   enterBattle();
+  if (id==='gameover') initGameoverCanvas();
+  if (id==='clear')    initClearCanvas();
+}
+
+// ── タイトルCanvas ──
+let titleRaf = null;
+function initTitleCanvas() {
+  if (titleRaf) { cancelAnimationFrame(titleRaf); titleRaf=null; }
+  const c = document.getElementById('title-canvas');
+  const ctx = c.getContext('2d');
+  c.width = window.innerWidth; c.height = window.innerHeight;
+  const stars = Array.from({length:120},()=>({
+    x:Math.random()*c.width, y:Math.random()*c.height,
+    r:Math.random()*2+0.5, alpha:Math.random(), speed:Math.random()*0.005+0.002
+  }));
+  (function draw(){
+    ctx.fillStyle='#0a0812'; ctx.fillRect(0,0,c.width,c.height);
+    const g=ctx.createRadialGradient(c.width/2,c.height*0.4,0,c.width/2,c.height*0.4,c.width*0.6);
+    g.addColorStop(0,'rgba(201,168,76,0.12)'); g.addColorStop(1,'transparent');
+    ctx.fillStyle=g; ctx.fillRect(0,0,c.width,c.height);
+    for(const s of stars){
+      s.alpha+=s.speed; if(s.alpha>1||s.alpha<0)s.speed*=-1;
+      ctx.globalAlpha=Math.abs(Math.sin(s.alpha*Math.PI));
+      ctx.fillStyle='#e8e0f0'; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    titleRaf=requestAnimationFrame(draw);
+  })();
+}
+
+// ── マップ ──
+function renderMap() {
+  const c = document.getElementById('map-canvas');
+  requestAnimationFrame(() => {
+  const ctx = c.getContext('2d');
+  const dpr = window.devicePixelRatio||1;
+  const rect = c.getBoundingClientRect();
+  c.width=rect.width*dpr; c.height=rect.height*dpr;
+  ctx.scale(dpr,dpr);
+  const W=rect.width, H=rect.height;
+  updateHpUI();
+
+  const ICONS={enemy:'⚔️',shop:'🏪',rest:'🏕️',treasure:'💎',boss:'🐉',event:'⚡'};
+  const COLORS={enemy:'#e05555',shop:'#c9a84c',rest:'#5ec95e',treasure:'#5599ee',boss:'#ff3333'};
+  const cols=3, cellW=W/cols, cellH=Math.min(H/Math.ceil(G.dungeon.length/cols),100);
+
+  G.mapRooms = G.dungeon.map((r,i)=>({
+    ...r, idx:i,
+    x:(i%cols)*cellW+cellW/2,
+    y:Math.floor(i/cols)*cellH+cellH/2,
+  }));
+
+  ctx.fillStyle='#0a0812'; ctx.fillRect(0,0,W,H);
+  for(let i=0;i<G.dungeon.length-1;i++){
+    const a=G.mapRooms[i],b=G.mapRooms[i+1];
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+    ctx.strokeStyle=a.cleared?'#c9a84c44':'#2e284844'; ctx.lineWidth=2; ctx.stroke();
+  }
+  for(const r of G.mapRooms){
+    const isCur=r.idx===G.mapCurrentIdx, col=COLORS[r.type]||'#888', rad=isCur?34:28;
+    if(isCur){ctx.shadowColor=col; ctx.shadowBlur=20;}
+    ctx.beginPath(); ctx.arc(r.x,r.y,rad,0,Math.PI*2);
+    ctx.fillStyle=r.cleared?'#1a1528':isCur?'#221d35':'#110e1a'; ctx.fill();
+    ctx.strokeStyle=r.cleared?'#2e2848':isCur?col:'#2e2848'; ctx.lineWidth=isCur?2.5:1.5; ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.globalAlpha=r.cleared?0.35:1;
+    ctx.font=`${isCur?22:18}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(ICONS[r.type]||'?',r.x,r.y-4); ctx.globalAlpha=1;
+    ctx.font=`${isCur?11:10}px Cinzel,serif`;
+    ctx.fillStyle=r.cleared?'#2e2848':isCur?col:'#9988bb';
+    ctx.fillText(`F${r.idx+1}`,r.x,r.y+16);
+  }
+  document.getElementById('map-floor-label').textContent=`Floor ${G.floor}`;
+  document.getElementById('map-gold').textContent=G.player.gold;
+  document.getElementById('map-deck').textContent=G.deck.length;
+
+  c.onclick = e => {
+    const cr=c.getBoundingClientRect();
+    const tx=e.clientX-cr.left, ty=e.clientY-cr.top;
+    for(const r of G.mapRooms){
+      if(r.idx!==G.mapCurrentIdx) continue;
+      if(Math.hypot(tx-r.x,ty-r.y)<40){ enterRoom(r); return; }
+    }
+  };
+  }); // requestAnimationFrame
+}
+
+function enterRoom(room) {
+  G.currentRoom=room; G.floor=room.idx+1;
+  if(room.type==='enemy'||room.type==='boss') showScreen('battle');
+  else if(room.type==='shop')     openShop();
+  else if(room.type==='rest')     openRest();
+  else if(room.type==='treasure') openTreasure();
+  else if(room.type==='event')    openEvent();
+}
+
+// ── 戦闘 ──
+let battleRaf = null;
+function enterBattle() {
+  if(battleRaf){cancelAnimationFrame(battleRaf);battleRaf=null;}
+  const isBoss = G.currentRoom?.type === 'boss';
+  const d = G.diffConf;
+  let base;
+  if(isBoss){
+    base = { ...BOSS_DEF,
+      maxHp: Math.floor(BOSS_DEF.maxHp * d.hpMult),
+      atk:   Math.floor(BOSS_DEF.atk   * d.atkMult),
+    };
+  } else {
+    const f=G.floor;
+    const w=[Math.max(0,8-f),Math.max(0,10-f),Math.min(f+1,8),Math.max(0,f-2)];
+    const tot=w.reduce((s,v)=>s+v,0);
+    let rnd=Math.random()*tot, idx=0;
+    for(let i=0;i<w.length;i++){rnd-=w[i]; if(rnd<=0){idx=i;break;}}
+    const src = ENEMIES[idx];
+    base = { ...src,
+      maxHp: Math.floor(src.maxHp * d.hpMult),
+      atk:   Math.floor(src.atk   * d.atkMult),
+    };
+  }
+  G.enemy={...base, hp:base.maxHp, turn:0, enraged:false};
+  G.enemyEffects=[];
+  drawHand(); updateBattleUI(); renderBattleCanvas(); updateHpUI();
+  if (G.floor === 1 && !localStorage.getItem('runefall_tutorial_done')) {
+    setTimeout(startTutorial, 800);
+  }
+}
+
+function renderBattleCanvas() {
+  if(battleRaf){cancelAnimationFrame(battleRaf);battleRaf=null;}
+  const c=document.getElementById('battle-canvas');
+  if(!c) return;
+
+  // display:flex 直後はレイアウト未確定でサイズが0になるため、
+  // 1フレーム待ってからCanvas初期化を行う
+  requestAnimationFrame(() => {
+    const ctx=c.getContext('2d');
+    const dpr=window.devicePixelRatio||1;
+    const rect=c.getBoundingClientRect();
+    c.width=rect.width*dpr; c.height=rect.height*dpr;
+    ctx.scale(dpr,dpr);
+    const W=rect.width, H=rect.height;
+    (function loop(){
+      ctx.fillStyle='#0a0812'; ctx.fillRect(0,0,W,H);
+      const bg=ctx.createRadialGradient(W/2,H*0.3,0,W/2,H*0.3,W*0.7);
+      bg.addColorStop(0,'rgba(26,21,40,1)'); bg.addColorStop(1,'rgba(10,8,18,1)');
+      ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+      if(G.enemy){
+        const ex=W/2, ey=H*0.42, floatY=Math.sin(Date.now()/667)*4;
+        ctx.save();
+        ctx.shadowColor='#ff3300';
+        ctx.shadowBlur=G.enemyEffects.includes('burn')?30:0;
+        ctx.fillStyle='white'; // 絵文字描画前に明示設定（未設定だとグラデが引き継がれ透明になる）
+        ctx.font=`${Math.min(H*0.22, W*0.35)}px serif`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(G.enemy.icon, ex, ey+floatY);
+        ctx.restore();
+        // 状態異常表示のみ（HPはヘッダーに表示済みのためCanvas内のHPバーは不要）
+        if(G.enemyEffects.length){
+          ctx.font='14px serif'; ctx.fillStyle='#ff9944';
+          ctx.textAlign='center';
+          ctx.fillText(G.enemyEffects.join(' · '), ex, ey + H*0.22);
+        }
+      }
+      updateParticles(ctx);
+      battleRaf=requestAnimationFrame(loop);
+    })();
+  });
+}
+
+function rRect(ctx,x,y,w,h,r){
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+// 属性別パーティクルカラー定義
+const PARTICLE_COLORS = {
+  fire:  ['#ff6633','#ffaa44','#ff3300'],
+  water: ['#3399ff','#aaddff','#0066cc'],
+  wind:  ['#66dd88','#ccffcc','#33bb55'],
+  earth: ['#cc9944','#ffcc66','#aa7722'],
+  light: ['#ffdd44','#ffffff','#ffee88'],
+  dark:  ['#9944cc','#cc88ff','#6600aa'],
+};
+
+function spawnParticles(x, y, tileId, count=20) {
+  const colors = PARTICLE_COLORS[tileId] || ['#ffffff','#cccccc'];
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2, sp=Math.random()*5+1;
+    const color = colors[Math.floor(Math.random()*colors.length)];
+    const r = count > 30 ? Math.random()*6+2 : Math.random()*4+1; // コンボ時は粒子大きめ
+    G.particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2.5,life:1,decay:Math.random()*0.03+0.015,r,color});
+  }
+}
+
+function updateParticles(ctx){
+  G.particles=G.particles.filter(p=>p.life>0);
+  for(const p of G.particles){
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=p.decay;
+    ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// 画面シェイク
+let shakeRaf=null;
+function shakeScreen(intensity=6, duration=300) {
+  const el = document.getElementById('screen-battle');
+  if (!el) return;
+  if (shakeRaf) { cancelAnimationFrame(shakeRaf); shakeRaf=null; }
+  const start = performance.now();
+  (function shake() {
+    const elapsed = performance.now() - start;
+    if (elapsed >= duration) { el.style.transform = ''; shakeRaf=null; return; }
+    const decay = 1 - elapsed/duration;
+    const amp = intensity * decay;
+    const x = (Math.random()-0.5)*2*amp;
+    const y = (Math.random()-0.5)*2*amp;
+    el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
+    shakeRaf = requestAnimationFrame(shake);
+  })();
+}
+
+function updateBattleUI(){
+  const hand=document.getElementById('tile-hand');
+  hand.innerHTML='';
+  G.hand.forEach((tile,i)=>{
+    const el=document.createElement('div');
+    el.className=`tile ${tile.id}`;
+    if(G.selected.includes(i)) el.classList.add('selected');
+    if(G.selected.length>=MAX_SELECTED&&!G.selected.includes(i)) el.classList.add('dimmed');
+    el.innerHTML=`<span class="tile-icon">${tile.icon}</span><span class="tile-power">Lv${tile.power}</span>`;
+    el.onclick=()=>toggleTile(i);
+    hand.appendChild(el);
+  });
+  updateSpellPreview();
+  document.getElementById('btn-cast').disabled=G.selected.length===0;
+  document.getElementById('floor-badge').textContent=`F${G.floor}`;
+}
+
+function toggleTile(i){
+  if(G.animating) return;
+  const idx=G.selected.indexOf(i);
+  if(idx!==-1) G.selected.splice(idx,1);
+  else if(G.selected.length<MAX_SELECTED) G.selected.push(i);
+  updateBattleUI();
+}
+
+function updateSpellPreview(){
+  const prev=document.getElementById('spell-preview');
+  if(G.selected.length===0){prev.classList.add('hidden');return;}
+  const spell=resolveSpell(G.selected.map(i=>G.hand[i].id));
+  prev.classList.remove('hidden');
+  document.getElementById('spell-name').textContent=spell.name;
+  let t='';
+  if(spell.dmg>0) t+=`⚔️ ${spell.dmg}`;
+  if(spell.heal>0) t+=`${t?'  ':''}💚 +${spell.heal}`;
+  if(spell.effect) t+=`  ${spell.desc}`;
+  document.getElementById('spell-effect').textContent=t||spell.desc;
+}
+
+function updateHpUI(){
+  const p=G.player, pct=Math.max(0,p.hp/p.maxHp*100);
+  ['map','battle'].forEach(id=>{
+    const bar=document.getElementById(`${id}-hp-bar`);
+    const txt=document.getElementById(`${id}-hp-text`);
+    if(bar) bar.style.width=pct+'%';
+    if(txt) txt.textContent=`${p.hp}/${p.maxHp}`;
+  });
+  if(G.enemy){
+    const ep=Math.max(0,G.enemy.hp/G.enemy.maxHp*100);
+    document.getElementById('enemy-hp-bar').style.width=ep+'%';
+    document.getElementById('enemy-hp-text').textContent=`${G.enemy.hp}/${G.enemy.maxHp}`;
+    document.getElementById('enemy-name').textContent=G.enemy.name;
+  }
+}
+
+function castSpell(){
+  if(G.animating||G.selected.length===0) return;
+  G.animating=true;
+  G.totalTurns++;
+  const ids=G.selected.map(i=>G.hand[i].id);
+  const spell=resolveSpell(ids);
+  const isCombo = spell.name !== '基本攻撃';
+  playSE(isCombo ? (spell.heal > 0 ? 'heal' : 'combo') : 'cast');
+  let dmg=spell.dmg+(spell.dmg>0?G.player.atkBonus:0);
+  if(G.enemyEffects.includes('burn')) dmg+=3;
+  let healAmt=spell.heal>0?spell.heal+G.player.healBonus:0;
+  const c=document.getElementById('battle-canvas');
+  const cr=c.getBoundingClientRect();
+  const particleCount = isCombo ? 50 : 20;
+  spawnParticles(cr.width/2, cr.height*0.42, ids[0], particleCount);
+  if(healAmt>0) G.player.hp=Math.min(G.player.maxHp,G.player.hp+healAmt);
+  G.enemy.hp=Math.max(0,G.enemy.hp-dmg);
+  if(spell.effect&&spell.effect!=='heal'&&!G.enemyEffects.includes(spell.effect)) G.enemyEffects.push(spell.effect);
+  if(G.currentRoom?.type==='boss'&&dmg>0) playSE('boss');
+  updateHpUI(); G.selected=[];
+  setTimeout(()=>{
+    if(G.enemy.hp<=0){
+      playSE('victory');
+      if(battleRaf){cancelAnimationFrame(battleRaf);battleRaf=null;}
+      if(G.currentRoom) G.currentRoom.cleared=true;
+      G.mapCurrentIdx=Math.min(G.mapCurrentIdx+1,G.dungeon.length-1);
+      if(G.currentRoom?.type==='boss'){ saveScore(true); showScreen('clear'); }
+      else openReward();
+    } else { enemyAttack(); }
+    G.animating=false;
+  },600);
+}
+
+function enemyAttack(){
+  if(G.enemyEffects.includes('stun')){
+    G.enemyEffects=G.enemyEffects.filter(e=>e!=='stun');
+    drawHand(); updateBattleUI(); return;
+  }
+  let atk=G.enemy.atk;
+  if(G.enemyEffects.includes('slow')) atk=Math.floor(atk*0.7);
+  G.player.hp=Math.max(0,G.player.hp-atk);
+  updateHpUI(); drawHand(); updateBattleUI();
+  if(G.player.hp<=0){
+    setTimeout(()=>{
+      if(battleRaf){cancelAnimationFrame(battleRaf);battleRaf=null;}
+      showScreen('gameover');
+    },400);
+  }
+}
+
+function skipTurn(){ if(!G.animating) enemyAttack(); }
+
+// ── スコア計算・保存 ──
+function calcScore(cleared) {
+  const d = DIFFICULTIES[G.difficulty] || DIFFICULTIES.normal;
+  const floorScore = G.floor * 100;
+  const turnBonus  = Math.max(0, 500 - G.totalTurns * 8);
+  const goldBonus  = Math.floor(G.player.gold * 0.5);
+  const diffMult   = { easy:0.7, normal:1.0, hard:1.5 }[G.difficulty] || 1.0;
+  const clearBonus = cleared ? 300 : 0;
+  return Math.floor((floorScore + turnBonus + goldBonus + clearBonus) * diffMult);
+}
+
+function saveScore(cleared) {
+  const score = calcScore(cleared);
+  const key = `runefall_best_${G.difficulty}`;
+  const prev = parseInt(localStorage.getItem(key) || '0');
+  if (score > prev) localStorage.setItem(key, String(score));
+  const runs = parseInt(localStorage.getItem('runefall_total_runs') || '0');
+  localStorage.setItem('runefall_total_runs', String(runs + 1));
+  return { score, prev, isNew: score > prev };
+}
+
+function renderScoreBoard(containerId, cleared) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  const score  = calcScore(cleared);
+  const key    = `runefall_best_${G.difficulty}`;
+  const best   = parseInt(localStorage.getItem(key) || '0');
+  const isNew  = score >= best;
+  const diffLabel = DIFFICULTIES[G.difficulty]?.label || 'NORMAL';
+  cont.innerHTML = `
+    <div class="score-row"><span class="score-label">難易度</span><span class="score-val">${diffLabel}</span></div>
+    <div class="score-row"><span class="score-label">到達フロア</span><span class="score-val">${G.floor} / ${DUNGEON_FLOORS}</span></div>
+    <div class="score-row"><span class="score-label">総ターン数</span><span class="score-val">${G.totalTurns}</span></div>
+    <div class="score-row"><span class="score-label">所持Gold</span><span class="score-val">${G.player.gold}G</span></div>
+    <div class="score-total">${score.toLocaleString()} pt</div>
+    ${isNew ? '<div class="score-best">🏆 ベストスコア更新！</div>' : `<div class="score-best">ベスト: ${best.toLocaleString()} pt</div>`}
+  `;
+}
+
+function updateTitleBestScores() {
+  const el = document.getElementById('title-best-scores');
+  if (!el) return;
+  const parts = Object.entries(DIFFICULTIES).map(([k,d]) => {
+    const b = parseInt(localStorage.getItem(`runefall_best_${k}`) || '0');
+    return b > 0 ? `${d.label} <span>${b.toLocaleString()}</span>` : null;
+  }).filter(Boolean);
+  el.innerHTML = parts.length ? parts.join(' &nbsp;|&nbsp; ') : '';
+}
+
+// ── ランダムイベント ──
+let currentEvent = null;
+function openEvent() {
+  if(G.currentRoom) G.currentRoom.cleared = true;
+  G.mapCurrentIdx = Math.min(G.mapCurrentIdx + 1, G.dungeon.length - 1);
+  currentEvent = RANDOM_EVENTS[Math.floor(Math.random() * RANDOM_EVENTS.length)];
+  document.getElementById('event-icon').textContent = currentEvent.icon;
+  document.getElementById('event-name').textContent = currentEvent.name;
+  document.getElementById('event-desc').textContent = currentEvent.desc;
+  const decBtn = document.getElementById('btn-event-decline');
+  decBtn.style.display = currentEvent.canDecline ? '' : 'none';
+  showScreen('event');
+}
+
+function openReward(){
+  G.player.gold+=Math.floor((G.enemy?.gold||10)*G.player.goldRate);
+  const choices=shuffle([...TILE_DEFS]).slice(0,3);
+  document.getElementById('reward-title').textContent='勝利！';
+  document.getElementById('reward-sub').textContent='タイルを1枚選んで獲得';
+  buildRewardTiles('reward-tiles', choices, tile => {
+    if (G.deck.length < G.diffConf.deckLimit) G.deck.push({...tile});
+    showScreen('map');
+  });
+  showScreen('reward');
+}
+
+function buildRewardTiles(id,tiles,onPick){
+  const cont=document.getElementById(id); cont.innerHTML='';
+  for(const t of tiles){
+    const el=document.createElement('div'); el.className='reward-tile';
+    el.innerHTML=`<span class="tile-icon">${t.icon}</span><span class="tile-name">${t.name}</span><span class="tile-pow">Pow ${t.power}</span>`;
+    el.onclick=()=>onPick(t);
+    cont.appendChild(el);
+  }
+}
+
+function openShop(){
+  if(G.currentRoom) G.currentRoom.cleared=true;
+  G.mapCurrentIdx=Math.min(G.mapCurrentIdx+1,G.dungeon.length-1);
+  document.getElementById('shop-gold').textContent=G.player.gold;
+  const choices=shuffle([...TILE_DEFS]).slice(0,4);
+  const cont=document.getElementById('shop-tiles'); cont.innerHTML='';
+  for(const t of choices){
+    const el=document.createElement('div'); el.className='reward-tile';
+    el.innerHTML=`<span class="tile-icon">${t.icon}</span><span class="tile-name">${t.name}</span><span class="tile-pow">${SHOP_PRICE}G</span>`;
+    el.onclick=()=>{
+      if(G.player.gold<SHOP_PRICE) return;
+      if(G.deck.length>=G.diffConf.deckLimit){ alert('デッキが上限（'+G.diffConf.deckLimit+'枚）に達しています'); return; }
+      G.player.gold-=SHOP_PRICE; G.deck.push({...t});
+      document.getElementById('shop-gold').textContent=G.player.gold;
+      el.style.opacity='0.3'; el.style.pointerEvents='none';
+      renderUpgradeList();
+    };
+    cont.appendChild(el);
+  }
+  renderUpgradeList(); switchShopTab('tiles'); showScreen('shop');
+}
+
+function switchShopTab(tab){
+  ['tiles','upgrades'].forEach(t=>{
+    document.getElementById(`shop-tab-${t}`).classList.toggle('active',t===tab);
+    document.getElementById(`shop-content-${t}`).classList.toggle('active',t===tab);
+  });
+}
+
+function renderUpgradeList(){
+  const cont=document.getElementById('upgrade-list'); cont.innerHTML='';
+  document.getElementById('shop-gold').textContent=G.player.gold;
+  for(const def of UPGRADE_DEFS){
+    const lv=G.upgradeLevels[def.id], maxed=lv>=def.maxLv, cost=def.baseCost+lv*10;
+    const el=document.createElement('div');
+    el.className='upgrade-item'+(maxed?' maxed':G.player.gold<cost?' cant-afford':'');
+    el.innerHTML=`<span class="upgrade-icon">${def.icon}</span><div class="upgrade-info"><div class="upgrade-name">${def.name}</div><div class="upgrade-desc">${def.desc(lv+(maxed?0:1))}</div><div class="upgrade-level">Lv ${lv} / ${def.maxLv}</div></div><span class="upgrade-cost">${maxed?'MAX':cost+'G'}</span>`;
+    if(!maxed) el.onclick=()=>{
+      if(G.player.gold<cost) return;
+      G.player.gold-=cost; G.upgradeLevels[def.id]++;
+      def.apply(G,G.upgradeLevels[def.id]); renderUpgradeList();
+    };
+    cont.appendChild(el);
+  }
+}
+
+function openDeck(){
+  const counts={};
+  for(const t of G.deck) counts[t.id]=(counts[t.id]||0)+1;
+  const total=G.deck.length;
+  document.getElementById('deck-total').textContent=`計${total}枚`;
+
+  // ショップへボタン: 現在のフロアがショップなら有効
+  const shopBtn = document.getElementById('btn-deck-to-shop');
+  const currentRoom = G.dungeon[G.mapCurrentIdx];
+  shopBtn.style.display = (currentRoom?.type === 'shop' && !currentRoom.cleared) ? '' : 'none';
+  const gc=document.getElementById('deck-groups'); gc.innerHTML='';
+  for(const def of TILE_DEFS){
+    const cnt=counts[def.id]||0; if(!cnt) continue;
+    const pct=Math.round(cnt/total*100);
+    const el=document.createElement('div'); el.className='deck-group';
+    el.innerHTML=`<span class="deck-group-icon">${def.icon}</span><div class="deck-group-info"><div class="deck-group-name">${def.name}ルーン</div><div class="deck-group-count">${cnt}枚 (${pct}%)</div><div class="deck-group-bar-wrap"><div class="deck-group-bar" style="width:${pct}%;background:${def.color}"></div></div></div>`;
+    gc.appendChild(el);
+  }
+  const cc=document.getElementById('deck-combos'); cc.innerHTML='';
+  for(const h of COMBO_HINTS){
+    const h1=counts[h.id]||0, h2=h.id2?(counts[h.id2]||0):Infinity;
+    const ok=h1>=h.need&&h2>=(h.need2||0);
+    const d1=TILE_DEFS.find(t=>t.id===h.id), d2=h.id2?TILE_DEFS.find(t=>t.id===h.id2):null;
+    const tiles=d2?`${d1.icon}×${h.need}+${d2.icon}×${h.need2}`:`${d1.icon}×${h.need}`;
+    const el=document.createElement('div'); el.className=`combo-hint ${ok?'ok':'ng'}`;
+    el.innerHTML=`${ok?'✅':'○'} <strong>${h.name}</strong> — ${tiles} ${ok?'（狙える）':`（あと${Math.max(0,h.need-h1)}枚）`}`;
+    cc.appendChild(el);
+  }
+  showScreen('deck');
+}
+
+function openRest(){
+  if(G.currentRoom) G.currentRoom.cleared=true;
+  G.mapCurrentIdx=Math.min(G.mapCurrentIdx+1,G.dungeon.length-1);
+  G.player.hp=Math.min(G.player.maxHp,G.player.hp+30);
+  showScreen('rest');
+}
+
+function openTreasure(){
+  if(G.currentRoom) G.currentRoom.cleared=true;
+  G.mapCurrentIdx=Math.min(G.mapCurrentIdx+1,G.dungeon.length-1);
+  const gold=Math.floor((20+Math.floor(Math.random()*20))*G.player.goldRate);
+  G.player.gold+=gold;
+  document.getElementById('treasure-amount').textContent=`+${gold}G`;
+  showScreen('treasure');
+}
+
+let goRaf=null;
+function initGameoverCanvas(){
+  if(goRaf){cancelAnimationFrame(goRaf);goRaf=null;}
+  saveScore(false);
+  renderScoreBoard('gameover-scoreboard', false);
+  document.getElementById('gameover-floor').textContent=`Floor ${G.floor} まで到達`;
+  const c=document.getElementById('gameover-canvas');
+  const ctx=c.getContext('2d');
+  c.width=window.innerWidth; c.height=window.innerHeight;
+  const ps=Array.from({length:40},()=>({
+    x:Math.random()*c.width,y:Math.random()*c.height,
+    vx:(Math.random()-0.5)*0.5,vy:-Math.random()*0.8-0.2,
+    r:Math.random()*3+1,life:1,decay:Math.random()*0.005+0.002,
+    color:`hsl(${Math.random()*30},80%,50%)`
+  }));
+  document.getElementById('gameover-floor').textContent=`Floor ${G.floor} まで到達`;
+  (function draw(){
+    ctx.fillStyle='rgba(10,8,18,0.3)'; ctx.fillRect(0,0,c.width,c.height);
+    for(const p of ps){
+      if(p.life<=0){p.x=Math.random()*c.width;p.y=c.height+10;p.life=1;p.vy=-Math.random()-0.5;}
+      p.x+=p.vx;p.y+=p.vy;p.life-=p.decay;
+      ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1; goRaf=requestAnimationFrame(draw);
+  })();
+}
+
+let clearRaf=null;
+function initClearCanvas(){
+  if(clearRaf){cancelAnimationFrame(clearRaf);clearRaf=null;}
+  saveScore(true);
+  renderScoreBoard('clear-scoreboard', true);
+  const c=document.getElementById('clear-canvas');
+  const ctx=c.getContext('2d');
+  c.width=window.innerWidth; c.height=window.innerHeight;
+  const ps=Array.from({length:60},()=>({
+    x:Math.random()*c.width,y:Math.random()*c.height+c.height,
+    vx:(Math.random()-0.5)*2,vy:-Math.random()*3-1,
+    r:Math.random()*5+2,life:1,decay:Math.random()*0.003+0.001,
+    color:`hsl(${40+Math.random()*30},90%,${50+Math.random()*30}%)`
+  }));
+  (function draw(){
+    ctx.fillStyle='rgba(10,8,18,0.2)'; ctx.fillRect(0,0,c.width,c.height);
+    for(const p of ps){
+      if(p.y<-10||p.life<=0){p.x=Math.random()*c.width;p.y=c.height+10;p.life=1;}
+      p.x+=p.vx;p.y+=p.vy;p.life-=p.decay;
+      ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+      ctx.font=`${p.r*3}px serif`;ctx.textAlign='center';ctx.fillText('✦',p.x,p.y);
+    }
+    ctx.globalAlpha=1; clearRaf=requestAnimationFrame(draw);
+  })();
+}
+
+// ══ SE（Web Audio API）══════════════════════════
+let audioCtx = null;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playSE(type) {
+  try {
+    const ctx = getAudio();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    const cfg = {
+      cast:    { freq:440, wave:'sine',     dur:0.15, vol:0.25 },
+      combo:   { freq:660, wave:'square',   dur:0.25, vol:0.3  },
+      hit:     { freq:220, wave:'sawtooth', dur:0.10, vol:0.25 },
+      heal:    { freq:528, wave:'sine',     dur:0.30, vol:0.2  },
+      boss:    { freq:110, wave:'square',   dur:0.30, vol:0.4  },
+      gameover:{ freq:180, wave:'sawtooth', dur:0.80, vol:0.35 },
+      victory: { freq:880, wave:'sine',     dur:0.40, vol:0.3  },
+      special: { freq:330, wave:'square',   dur:0.40, vol:0.4  },
+    }[type] || { freq:440, wave:'sine', dur:0.15, vol:0.2 };
+    osc.type = cfg.wave;
+    osc.frequency.setValueAtTime(cfg.freq, ctx.currentTime);
+    gain.gain.setValueAtTime(cfg.vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + cfg.dur);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + cfg.dur);
+  } catch(e) {}
+}
+
+// ══ ボス特殊行動 ════════════════════════════════
+// ボスのHP・行動ターン数を強化
+const BOSS_DEF = {
+  name:'魔竜', icon:'🐉', maxHp:110, atk:14, gold:60,
+  // ターン3の倍数で炎の息吹、HP40%以下で激怒
+};
+
+function getBossAction() {
+  const hp = G.enemy.hp / G.enemy.maxHp;
+  const t  = G.enemy.turn || 0;
+
+  // 激怒状態（HP40%以下）
+  if (hp <= 0.4 && !G.enemy.enraged) {
+    G.enemy.enraged = true;
+    G.enemy.atk = Math.floor(G.enemy.atk * 1.8); // 難易度倍率適用済みのATKを基準に計算
+    return { type:'enrage', name:'【激怒】', msg:'魔竜が激怒した！攻撃力が跳ね上がる！', seType:'special' };
+  }
+  // 3ターンごとに炎の息吹
+  if (t > 0 && t % 3 === 0) {
+    return { type:'breath', name:'炎の息吹', msg:'魔竜が炎を吐いた！', dmgMult:1.6, seType:'boss', effect:'burn' };
+  }
+  // 5ターンごとに手牌破壊
+  if (t > 0 && t % 5 === 0) {
+    return { type:'roar', name:'竜の咆哮', msg:'咆哮でルーンが乱れた！手牌がシャッフルされる', seType:'special' };
+  }
+  return { type:'normal', seType:'hit' };
+}
+
+// ══ チュートリアル ══════════════════════════════
+const TUTORIAL_STEPS = [
+  { icon:'👋', msg:'RUNEFALLへようこそ！\nまずはルーンタイルを選んでみましょう。', target:'tile-hand' },
+  { icon:'🎴', msg:'タイルは最大3枚まで選べます。\n同じ属性や相性のよい組み合わせを狙いましょう。', target:'tile-hand' },
+  { icon:'⚔️', msg:'タイルを選んだら「詠唱」で呪文を発動！\n組み合わせ次第で強力なコンボが炸裂します。', target:'btn-cast' },
+  { icon:'🗺️', msg:'敵を倒したらマップに戻ります。\n部屋の種類に注目：⚔️敵 🏪ショップ 🏕️休憩 💎宝箱', target:null },
+  { icon:'🎴', msg:'「デッキ確認」でコンボ到達状況を確認できます。\nタイルを集めてコンボを狙おう！', target:'btn-open-deck' },
+];
+
+let tutorialActive = false;
+let tutorialStep = 0;
+let tutorialHighlightEl = null;
+
+function startTutorial() {
+  if (localStorage.getItem('runefall_tutorial_done') === '1') return;
+  tutorialActive = true;
+  tutorialStep = 0;
+  showTutorialStep();
+}
+
+function showTutorialStep() {
+  const overlay = document.getElementById('tutorial-overlay');
+  const step = TUTORIAL_STEPS[tutorialStep];
+  if (!step) { endTutorial(); return; }
+
+  overlay.classList.add('active');
+  document.getElementById('tutorial-icon').textContent = step.icon;
+  document.getElementById('tutorial-msg').textContent  = step.msg;
+
+  // プログレスドット更新
+  const prog = document.getElementById('tutorial-progress');
+  prog.innerHTML = '';
+  TUTORIAL_STEPS.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'tutorial-dot' + (i <= tutorialStep ? ' done' : '');
+    prog.appendChild(d);
+  });
+
+  // ハイライト対象
+  const hl = document.getElementById('tutorial-highlight');
+  if (step.target) {
+    const target = document.getElementById(step.target);
+    if (target) {
+      const r = target.getBoundingClientRect();
+      hl.style.cssText = `display:block;top:${r.top-6}px;left:${r.left-6}px;width:${r.width+12}px;height:${r.height+12}px`;
+    } else { hl.style.display = 'none'; }
+  } else { hl.style.display = 'none'; }
+
+  // 最終ステップなら「完了」
+  const btn = document.getElementById('btn-tutorial-next');
+  btn.textContent = tutorialStep === TUTORIAL_STEPS.length - 1 ? '完了！' : '次へ';
+}
+
+function nextTutorialStep() {
+  tutorialStep++;
+  if (tutorialStep >= TUTORIAL_STEPS.length) { endTutorial(); return; }
+  showTutorialStep();
+}
+
+function endTutorial() {
+  tutorialActive = false;
+  document.getElementById('tutorial-overlay').classList.remove('active');
+  document.getElementById('tutorial-highlight').style.display = 'none';
+  localStorage.setItem('runefall_tutorial_done', '1');
+}
+
+// ══ ボス戦 enemyAttack を特殊行動対応に上書き ══
+function enemyAttack(){
+  const isBoss = G.currentRoom?.type === 'boss';
+
+  if (G.enemyEffects.includes('stun')) {
+    G.enemyEffects = G.enemyEffects.filter(e => e !== 'stun');
+    drawHand(); updateBattleUI(); return;
+  }
+
+  G.enemy.turn = (G.enemy.turn || 0) + 1;
+
+  if (isBoss) {
+    const action = getBossAction();
+
+    if (action.type === 'enrage') {
+      playSE('special');
+      showBossAlert(action.msg);
+      shakeScreen(8, 400);
+      G.player.hp = Math.max(0, G.player.hp - G.enemy.atk);
+      updateHpUI(); drawHand(); updateBattleUI();
+
+    } else if (action.type === 'breath') {
+      playSE('boss');
+      showBossAlert(action.msg);
+      shakeScreen(10, 500);
+      const dmg = Math.floor(G.enemy.atk * action.dmgMult);
+      G.player.hp = Math.max(0, G.player.hp - dmg);
+      if (!G.enemyEffects.includes('burn')) G.enemyEffects.push('burn');
+      updateHpUI(); drawHand(); updateBattleUI();
+
+    } else if (action.type === 'roar') {
+      playSE('special');
+      showBossAlert(action.msg);
+      shakeScreen(6, 350);
+      G.player.hp = Math.max(0, G.player.hp - G.enemy.atk);
+      updateHpUI(); drawHand(); updateBattleUI();
+
+    } else {
+      let atk = G.enemy.atk;
+      if (G.enemyEffects.includes('slow')) atk = Math.floor(atk * 0.7);
+      playSE('hit');
+      shakeScreen(4, 200);
+      G.player.hp = Math.max(0, G.player.hp - atk);
+      updateHpUI(); drawHand(); updateBattleUI();
+    }
+  } else {
+    let atk = G.enemy.atk;
+    if (G.enemyEffects.includes('slow')) atk = Math.floor(atk * 0.7);
+    playSE('hit');
+    shakeScreen(3, 150);
+    G.player.hp = Math.max(0, G.player.hp - atk);
+    updateHpUI(); drawHand(); updateBattleUI();
+  }
+
+  if (G.player.hp <= 0) {
+    playSE('gameover');
+    setTimeout(() => {
+      if(battleRaf){cancelAnimationFrame(battleRaf);battleRaf=null;}
+      showScreen('gameover');
+    }, 400);
+  }
+}
+
+function showBossAlert(msg) {
+  const el = document.getElementById('boss-alert');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 2000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initGame();
+
+  // 難易度選択ボタン（タイトル画面）
+  document.getElementById('btn-easy').onclick   = () => { initGame('easy');   showScreen('map'); };
+  document.getElementById('btn-normal').onclick = () => { initGame('normal'); showScreen('map'); };
+  document.getElementById('btn-hard').onclick   = () => { initGame('hard');   showScreen('map'); };
+
+  document.getElementById('btn-howto').onclick      = () => showScreen('howto');
+  document.getElementById('btn-howto-back').onclick = () => showScreen('title');
+  document.getElementById('btn-cast').onclick       = castSpell;
+  document.getElementById('btn-skip').onclick       = skipTurn;
+  document.getElementById('btn-reward-skip').onclick= () => showScreen('map');
+  document.getElementById('btn-shop-leave').onclick = () => showScreen('map');
+  document.getElementById('btn-rest-leave').onclick = () => showScreen('map');
+  document.getElementById('btn-treasure-leave').onclick = () => showScreen('map');
+  document.getElementById('btn-open-deck').onclick  = openDeck;
+  document.getElementById('btn-deck-back').onclick  = () => showScreen('map');
+  document.getElementById('btn-deck-to-shop').onclick = () => openShop();
+  document.getElementById('btn-tutorial-next').onclick = nextTutorialStep;
+
+  // イベント画面ボタン
+  document.getElementById('btn-event-accept').onclick  = () => { if(currentEvent) currentEvent.onAccept(G); };
+  document.getElementById('btn-event-decline').onclick = () => showScreen('map');
+
+  document.getElementById('btn-retry').onclick      = () => { initGame(); showScreen('map'); };
+  document.getElementById('btn-title').onclick      = () => showScreen('title');
+  document.getElementById('btn-clear-retry').onclick= () => { initGame(); showScreen('map'); };
+  document.getElementById('btn-clear-title').onclick= () => showScreen('title');
+
+  showScreen('title');
+});
+</script>
+</body>
+</html>
