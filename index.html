@@ -818,10 +818,28 @@ function buildStartDeck() {
 }
 
 function generateDungeon() {
-  return Array.from({length:DUNGEON_FLOORS},(_,i)=>({
-    type: i===DUNGEON_FLOORS-1 ? 'boss' : ROOM_TYPES[Math.floor(Math.random()*ROOM_TYPES.length)],
-    cleared:false
-  }));
+  const floors = [];
+  for (let i = 0; i < DUNGEON_FLOORS; i++) {
+    if (i === 0) {
+      // F1: enemy固定・1択
+      floors.push({ choices:[{ type:'enemy', cleared:false }] });
+    } else if (i === DUNGEON_FLOORS - 1) {
+      // F8: boss固定・1択
+      floors.push({ choices:[{ type:'boss', cleared:false }] });
+    } else {
+      // F2〜F7: 2択（同タイプ禁止）
+      let a, b;
+      do {
+        a = ROOM_TYPES[Math.floor(Math.random()*ROOM_TYPES.length)];
+        b = ROOM_TYPES[Math.floor(Math.random()*ROOM_TYPES.length)];
+      } while (a === b);
+      floors.push({ choices:[
+        { type:a, cleared:false },
+        { type:b, cleared:false },
+      ]});
+    }
+  }
+  return floors;
 }
 
 function shuffle(arr) {
@@ -919,58 +937,117 @@ function renderMap() {
   const W=rect.width, H=rect.height;
   updateHpUI();
 
-  const ICONS={enemy:'⚔️',shop:'🏪',rest:'🏕️',treasure:'💎',boss:'🐉',event:'⚡'};
-  const COLORS={enemy:'#e05555',shop:'#c9a84c',rest:'#5ec95e',treasure:'#5599ee',boss:'#ff3333'};
-  const cols=3, cellW=W/cols, cellH=Math.min(H/Math.ceil(G.dungeon.length/cols),100);
+  const ICONS ={enemy:'⚔️',shop:'🏪',rest:'🏕️',treasure:'💎',boss:'🐉',event:'⚡'};
+  const COLORS={enemy:'#e05555',shop:'#c9a84c',rest:'#5ec95e',treasure:'#5599ee',boss:'#ff3333',event:'#cc66ff'};
+  const rowH = H / DUNGEON_FLOORS;
+  const rad  = 28;
 
-  G.mapRooms = G.dungeon.map((r,i)=>({
-    ...r, idx:i,
-    x:(i%cols)*cellW+cellW/2,
-    y:Math.floor(i/cols)*cellH+cellH/2,
-  }));
+  // 各フロア・各選択肢のノード座標を計算
+  // G.mapRooms: { floorIdx, choiceIdx, type, cleared, x, y }
+  G.mapRooms = [];
+  G.dungeon.forEach((floor, fi) => {
+    const y = fi * rowH + rowH / 2;
+    const n = floor.choices.length;
+    floor.choices.forEach((choice, ci) => {
+      const x = n === 1 ? W/2 : (ci === 0 ? W*0.28 : W*0.72);
+      G.mapRooms.push({ ...choice, floorIdx:fi, choiceIdx:ci, x, y });
+    });
+  });
 
   ctx.fillStyle='#0a0812'; ctx.fillRect(0,0,W,H);
-  for(let i=0;i<G.dungeon.length-1;i++){
-    const a=G.mapRooms[i],b=G.mapRooms[i+1];
-    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
-    ctx.strokeStyle=a.cleared?'#c9a84c44':'#2e284844'; ctx.lineWidth=2; ctx.stroke();
+
+  // 接続線：現在フロアより前は選択済み経路のみ、現在フロアは選択肢両方に線を引く
+  for (let fi = 0; fi < DUNGEON_FLOORS - 1; fi++) {
+    const curNodes  = G.mapRooms.filter(r => r.floorIdx === fi);
+    const nextNodes = G.mapRooms.filter(r => r.floorIdx === fi + 1);
+
+    if (fi < G.mapCurrentIdx) {
+      // 通過済み：選択した部屋からのみ線を引く
+      const chosen = curNodes.find(r => r.cleared);
+      if (chosen) {
+        nextNodes.forEach(n => {
+          ctx.beginPath(); ctx.moveTo(chosen.x, chosen.y); ctx.lineTo(n.x, n.y);
+          ctx.strokeStyle='#c9a84c55'; ctx.lineWidth=1.5; ctx.stroke();
+        });
+      }
+    } else if (fi === G.mapCurrentIdx) {
+      // 現在フロア：両選択肢から次フロアへ線を引く
+      curNodes.forEach(cur => {
+        nextNodes.forEach(n => {
+          ctx.beginPath(); ctx.moveTo(cur.x, cur.y); ctx.lineTo(n.x, n.y);
+          ctx.strokeStyle='#2e284866'; ctx.lineWidth=1.5; ctx.stroke();
+        });
+      });
+    } else {
+      // 未到達：薄く表示
+      curNodes.forEach(cur => {
+        nextNodes.forEach(n => {
+          ctx.beginPath(); ctx.moveTo(cur.x, cur.y); ctx.lineTo(n.x, n.y);
+          ctx.strokeStyle='#2e284833'; ctx.lineWidth=1; ctx.stroke();
+        });
+      });
+    }
   }
-  for(const r of G.mapRooms){
-    const isCur=r.idx===G.mapCurrentIdx, col=COLORS[r.type]||'#888', rad=isCur?34:28;
-    if(isCur){ctx.shadowColor=col; ctx.shadowBlur=20;}
-    ctx.beginPath(); ctx.arc(r.x,r.y,rad,0,Math.PI*2);
-    ctx.fillStyle=r.cleared?'#1a1528':isCur?'#221d35':'#110e1a'; ctx.fill();
-    ctx.strokeStyle=r.cleared?'#2e2848':isCur?col:'#2e2848'; ctx.lineWidth=isCur?2.5:1.5; ctx.stroke();
-    ctx.shadowBlur=0;
-    ctx.globalAlpha=r.cleared?0.35:1;
-    ctx.font=`${isCur?22:18}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(ICONS[r.type]||'?',r.x,r.y-4); ctx.globalAlpha=1;
-    ctx.font=`${isCur?11:10}px Cinzel,serif`;
-    ctx.fillStyle=r.cleared?'#2e2848':isCur?col:'#9988bb';
-    ctx.fillText(`F${r.idx+1}`,r.x,r.y+16);
+
+  // ノード描画
+  for (const r of G.mapRooms) {
+    const isCurFloor = r.floorIdx === G.mapCurrentIdx;
+    const col = COLORS[r.type] || '#888';
+
+    // 通過済みフロアの未選択肢は非表示
+    if (r.floorIdx < G.mapCurrentIdx && !r.cleared) continue;
+
+    ctx.globalAlpha = r.cleared ? 0.35 : (r.floorIdx > G.mapCurrentIdx ? 0.5 : 1);
+
+    if (isCurFloor) { ctx.shadowColor=col; ctx.shadowBlur=18; }
+    ctx.beginPath(); ctx.arc(r.x, r.y, isCurFloor ? 32 : rad, 0, Math.PI*2);
+    ctx.fillStyle = r.cleared ? '#1a1528' : isCurFloor ? '#221d35' : '#110e1a';
+    ctx.fill();
+    ctx.strokeStyle = r.cleared ? '#2e2848' : isCurFloor ? col : '#2e2848';
+    ctx.lineWidth = isCurFloor ? 2.5 : 1.5; ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.font=`${isCurFloor?22:17}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle='white';
+    ctx.fillText(ICONS[r.type]||'?', r.x, r.y - 4);
+
+    ctx.font=`${isCurFloor?11:9}px Cinzel,serif`;
+    ctx.fillStyle = r.cleared ? '#2e2848' : isCurFloor ? col : '#9988bb';
+    ctx.fillText(`F${r.floorIdx+1}`, r.x, r.y + 16);
+
+    ctx.globalAlpha = 1;
   }
+
   document.getElementById('map-floor-label').textContent=`Floor ${G.floor}`;
   document.getElementById('map-gold').textContent=G.player.gold;
   document.getElementById('map-deck').textContent=G.deck.length;
 
   c.onclick = e => {
-    const cr=c.getBoundingClientRect();
-    const tx=e.clientX-cr.left, ty=e.clientY-cr.top;
-    for(const r of G.mapRooms){
-      if(r.idx!==G.mapCurrentIdx) continue;
-      if(Math.hypot(tx-r.x,ty-r.y)<40){ enterRoom(r); return; }
+    const cr = c.getBoundingClientRect();
+    const tx = e.clientX - cr.left, ty = e.clientY - cr.top;
+    for (const r of G.mapRooms) {
+      if (r.floorIdx !== G.mapCurrentIdx) continue;
+      if (Math.hypot(tx - r.x, ty - r.y) < 40) { enterRoom(r); return; }
     }
   };
   }); // requestAnimationFrame
 }
 
 function enterRoom(room) {
-  G.currentRoom=room; G.floor=room.idx+1;
+  G.currentRoom = room;
+  G.floor = room.floorIdx + 1;
   if(room.type==='enemy'||room.type==='boss') showScreen('battle');
   else if(room.type==='shop')     openShop();
   else if(room.type==='rest')     openRest();
   else if(room.type==='treasure') openTreasure();
   else if(room.type==='event')    openEvent();
+}
+
+// 部屋クリア後に次フロアへ進む共通処理
+function advanceFloor() {
+  if (G.currentRoom) G.currentRoom.cleared = true;
+  G.mapCurrentIdx = Math.min(G.mapCurrentIdx + 1, DUNGEON_FLOORS - 1);
 }
 
 // ── 戦闘 ──
@@ -1205,8 +1282,7 @@ function castSpell(){
     if(G.enemy.hp<=0){
       playSE('victory');
       if(battleRaf){cancelAnimationFrame(battleRaf);battleRaf=null;}
-      if(G.currentRoom) G.currentRoom.cleared=true;
-      G.mapCurrentIdx=Math.min(G.mapCurrentIdx+1,G.dungeon.length-1);
+      advanceFloor();
       if(G.currentRoom?.type==='boss'){ saveScore(true); showScreen('clear'); }
       else openReward();
     } else { enemyAttack(); }
@@ -1390,8 +1466,7 @@ function buildRewardTiles(id,tiles,onPick){
 }
 
 function openShop(){
-  if(G.currentRoom) G.currentRoom.cleared=true;
-  G.mapCurrentIdx=Math.min(G.mapCurrentIdx+1,G.dungeon.length-1);
+  advanceFloor();
   document.getElementById('shop-gold').textContent=G.player.gold;
   const choices=shuffle([...TILE_DEFS]).slice(0,4);
   const cont=document.getElementById('shop-tiles'); cont.innerHTML='';
@@ -1467,15 +1542,13 @@ function openDeck(){
 }
 
 function openRest(){
-  if(G.currentRoom) G.currentRoom.cleared=true;
-  G.mapCurrentIdx=Math.min(G.mapCurrentIdx+1,G.dungeon.length-1);
+  advanceFloor();
   G.player.hp=Math.min(G.player.maxHp,G.player.hp+30);
   showScreen('rest');
 }
 
 function openTreasure(){
-  if(G.currentRoom) G.currentRoom.cleared=true;
-  G.mapCurrentIdx=Math.min(G.mapCurrentIdx+1,G.dungeon.length-1);
+  advanceFloor();
   const gold=Math.floor((20+Math.floor(Math.random()*20))*G.player.goldRate);
   G.player.gold+=gold;
   document.getElementById('treasure-amount').textContent=`+${gold}G`;
