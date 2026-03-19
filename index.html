@@ -453,12 +453,14 @@ html, body {
   </div>
 
   <!-- XPバーエリア（タブの外・常に表示） -->
-  <div id="achievements-xp-area" style="flex-shrink:0;padding:12px 16px 8px;text-align:center;border-bottom:1px solid var(--border)">
-    <div style="font-size:11px;color:var(--text2)">累計メタXP</div>
-    <div id="achievements-xp-val" style="font-family:'Cinzel',serif;font-size:22px;color:var(--accent2)">0</div>
-    <div class="meta-xp-bar-wrap"><div id="achievements-xp-bar" class="meta-xp-bar" style="width:0%"></div></div>
-    <div id="achievements-xp-next" style="font-size:11px;color:var(--text2);margin-top:3px"></div>
-    <div id="achievements-summary" style="font-size:11px;color:var(--accent);margin-top:4px"></div>
+  <div id="achievements-xp-area" style="flex-shrink:0;padding:12px 16px 8px;border-bottom:1px solid var(--border)">
+    <div style="max-width:480px;margin:0 auto;text-align:center">
+      <div style="font-size:11px;color:var(--text2)">累計メタXP</div>
+      <div id="achievements-xp-val" style="font-family:'Cinzel',serif;font-size:22px;color:var(--accent2)">0</div>
+      <div class="meta-xp-bar-wrap"><div id="achievements-xp-bar" class="meta-xp-bar" style="width:0%"></div></div>
+      <div id="achievements-xp-next" style="font-size:11px;color:var(--text2);margin-top:3px"></div>
+      <div id="achievements-summary" style="font-size:11px;color:var(--accent);margin-top:4px"></div>
+    </div>
   </div>
 
   <!-- タブバー -->
@@ -940,18 +942,6 @@ RF.Config = (() => {
     { icon:'🗺️', msg:'敵を倒したらマップに戻ります。\n部屋の種類に注目：⚔️敵 🏪ショップ 🏕️休憩 💎宝箱', target:null },
     { icon:'🎴', msg:'「デッキ確認」でコンボ到達状況を確認できます。\nタイルを集めてコンボを狙おう！', target:'btn-open-deck' },
   ];
-  // ── メタ進行：解放コンテンツ定義 ──
-  const META_UNLOCKS = [
-    { xp:  50, id:'speed_start',   type:'passive',  name:'迅速の加護',    icon:'💰', desc:'ゲーム開始時にGold+10' },
-    { xp: 120, id:'deck_chaos',    type:'deck',     name:'混沌のデッキ',  icon:'🎲', desc:'ランダム12枚の5枚目デッキを解放' },
-    { xp: 200, id:'rest_heal',     type:'passive',  name:'旅人の回復力',  icon:'🏕️', desc:'休憩の回復量+10（30→40）' },
-    { xp: 300, id:'shop_discount', type:'passive',  name:'交渉術',        icon:'🏪', desc:'タイル購入価格-3G（15→12）' },
-    { xp: 450, id:'event_cross',   type:'event',    name:'運命の導き',    icon:'✨', desc:'新イベント「運命の交差点」を追加' },
-    { xp: 600, id:'boss_preview',  type:'info',     name:'竜の知識',      icon:'🐉', desc:'ボス戦前に次の特殊行動を予告' },
-    { xp: 800, id:'deck_ancient',  type:'deck',     name:'古の術式',      icon:'📜', desc:'高パワータイル中心の「古代」デッキを解放' },
-    { xp:1000, id:'diff_void',     type:'difficulty',name:'深淵への挑戦', icon:'🌑', desc:'VOID難易度を解放（敵HP×1.3・スコア×2.0）' },
-  ];
-
   const ROOM_TYPES     = ['enemy','enemy','enemy','shop','treasure','rest','event'];
   const DUNGEON_FLOORS = 8;
   const SHOP_PRICE     = 15;
@@ -990,22 +980,21 @@ RF.Config = (() => {
     {
       id:'chaos', icon:'🎲', name:'混沌',
       desc:'ランダムな12枚で挑む。何が起こるかわからない。',
-      tiles:null, // ランダム生成
+      tiles:null,
       combo:'運次第…',
-      unlock:'deck_chaos',
+      unlock:'deck_chaos',  // Rank4のeffectキーと一致
     },
     {
       id:'ancient', icon:'📜', name:'古代',
       desc:'高パワータイル中心の上級構成。火力は高いが安定しない。',
       tiles:{ earth:4, fire:3, dark:3, water:1, wind:1, light:0 },
       combo:'Earthquake / Abyss / Magma',
-      unlock:'deck_ancient',
+      unlock:'deck_ancient', // Rank5のeffectキーと一致
     },
   ];
 
   return { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS,
-           ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED,
-           DECK_PRESETS, META_UNLOCKS };
+           ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED, DECK_PRESETS };
 })();
 
 // ── RF.Effects: エフェクトシステム ───────────────────────────────
@@ -1044,31 +1033,28 @@ let currentDeckPreset = localStorage.getItem('runefall_last_deck') || 'balanced'
 // ── 実績画面描画 ──
 function renderAchievements() {
   const totalXp  = parseInt(localStorage.getItem('runefall_meta_xp') || '0');
-  const unlocked = getUnlocked();
   const achieved = getAchieved();
+  const curRank  = getCurrentRank(totalXp);
 
-  // XPバー
   document.getElementById('achievements-xp-val').textContent = totalXp;
-  const nextUnlock = META_UNLOCKS.find(u => u.xp > totalXp);
-  const prevUnlock = [...META_UNLOCKS].reverse().find(u => u.xp <= totalXp);
-  const barPct = nextUnlock
-    ? Math.floor(((totalXp-(prevUnlock?.xp||0)) / (nextUnlock.xp-(prevUnlock?.xp||0)))*100)
+  const nextRank = RANKS.find(r => r.xp > totalXp);
+  const barPct   = nextRank
+    ? Math.floor(((totalXp - curRank.xp) / (nextRank.xp - curRank.xp)) * 100)
     : 100;
-  document.getElementById('achievements-xp-bar').style.width = barPct+'%';
-  document.getElementById('achievements-xp-next').textContent = nextUnlock
-    ? `次の解放まで ${nextUnlock.xp-totalXp}XP（${nextUnlock.icon} ${nextUnlock.name}）`
-    : '全コンテンツ解放済み！';
+  document.getElementById('achievements-xp-bar').style.width = barPct + '%';
+  document.getElementById('achievements-xp-next').textContent = nextRank
+    ? 'Rank' + nextRank.rank + '「' + nextRank.name + '」まで ' + (nextRank.xp - totalXp) + 'XP'
+    : '最高ランク到達！';
 
-  // 達成率サマリー
   const totalAch = ACHIEVEMENTS.length;
   const doneAch  = ACHIEVEMENTS.filter(a => achieved.includes(a.id)).length;
   document.getElementById('achievements-summary').textContent =
-    `実績 ${doneAch} / ${totalAch}（${Math.floor(doneAch/totalAch*100)}%）`;
+    '🎖️ Rank' + curRank.rank + '「' + curRank.title + '」　実績 ' + doneAch + '/' + totalAch +
+    '（' + Math.floor(doneAch/totalAch*100) + '%）';
 
-  // タブ定義: 解放コンテンツ + 実績カテゴリ
   const cats = [...new Set(ACHIEVEMENTS.map(a => a.cat))];
   const tabs = [
-    { id:'unlock', label:'解放', items: META_UNLOCKS, type:'unlock' },
+    { id:'rank', label:'ランク', type:'rank' },
     ...cats.map(cat => ({
       id: cat, label: cat,
       items: ACHIEVEMENTS.filter(a => a.cat === cat),
@@ -1076,22 +1062,19 @@ function renderAchievements() {
     })),
   ];
 
-  // タブバー描画
-  const tabBar = document.getElementById('ach-tab-bar');
-  tabBar.innerHTML = '';
+  const tabBar   = document.getElementById('ach-tab-bar');
   const contArea = document.getElementById('ach-tab-contents');
+  tabBar.innerHTML = '';
   contArea.innerHTML = '';
 
   tabs.forEach((tab, ti) => {
-    // タブボタン
     const btn = document.createElement('button');
     btn.className = 'ach-tab' + (ti===0?' active':'');
-    if (tab.type === 'unlock') {
-      const doneU = META_UNLOCKS.filter(u => unlocked.includes(u.id)).length;
-      btn.innerHTML = `${tab.label}<span class="ach-count">${doneU}/${META_UNLOCKS.length}</span>`;
+    if (tab.type === 'rank') {
+      btn.innerHTML = 'ランク<span class="ach-count">Rank' + curRank.rank + '/7</span>';
     } else {
       const done = tab.items.filter(a => achieved.includes(a.id)).length;
-      btn.innerHTML = `${tab.label}<span class="ach-count">${done}/${tab.items.length}</span>`;
+      btn.innerHTML = tab.label + '<span class="ach-count">' + done + '/' + tab.items.length + '</span>';
     }
     btn.onclick = () => {
       tabBar.querySelectorAll('.ach-tab').forEach(b => b.classList.remove('active'));
@@ -1101,47 +1084,46 @@ function renderAchievements() {
     };
     tabBar.appendChild(btn);
 
-    // タブコンテンツ
     const cont = document.createElement('div');
     cont.className = 'ach-tab-content' + (ti===0?' active':'');
     cont.id = 'ach-content-'+tab.id;
 
-    if (tab.type === 'unlock') {
-      // 未解放を上・解放済みを下
-      const sorted = [...META_UNLOCKS].sort((a,b) => {
-        const ua = unlocked.includes(a.id), ub = unlocked.includes(b.id);
-        return ua === ub ? 0 : ua ? 1 : -1;
-      });
-      sorted.forEach(u => {
-        const isUnlocked = unlocked.includes(u.id);
+    if (tab.type === 'rank') {
+      RANKS.forEach(r => {
+        const isReached = totalXp >= r.xp;
+        const isCurrent = r.rank === curRank.rank;
         const el = document.createElement('div');
-        el.className = 'achievement-item ' + (isUnlocked?'unlocked':'locked');
-        el.innerHTML = `
-          <span class="achievement-icon">${u.icon}</span>
-          <div class="achievement-info">
-            <div class="achievement-name">${u.name}</div>
-            <div class="achievement-desc">${u.desc}</div>
-          </div>
-          <span class="achievement-xp">${isUnlocked?'✅':u.xp+'XP'}</span>`;
+        el.className = 'achievement-item ' + (isReached ? 'unlocked' : 'locked');
+        if (isCurrent) el.style.borderColor = 'var(--accent2)';
+        const needNote = !isReached
+          ? '<div class="achievement-desc" style="color:var(--accent)">必要XP: ' + r.xp + '（あと' + (r.xp-totalXp) + 'XP）</div>'
+          : '';
+        el.innerHTML =
+          '<span class="achievement-icon">' + (isReached ? '🎖️' : '🔒') + '</span>' +
+          '<div class="achievement-info">' +
+            '<div class="achievement-name">Rank' + r.rank + '「' + r.name + '」' + (isCurrent?' ◀ 現在':'') + '</div>' +
+            '<div class="achievement-desc">' + r.desc + '</div>' +
+            needNote +
+          '</div>' +
+          '<span class="achievement-xp">' + (isReached ? '✅' : r.xp+'XP') + '</span>';
         cont.appendChild(el);
       });
     } else {
-      // 未達成を上・達成済みを下
-      const sorted = [...tab.items].sort((a,b) => {
+      const sorted = [...tab.items].sort((a, b) => {
         const aa = achieved.includes(a.id), ab = achieved.includes(b.id);
         return aa === ab ? 0 : aa ? 1 : -1;
       });
       sorted.forEach(a => {
         const isAchieved = achieved.includes(a.id);
         const el = document.createElement('div');
-        el.className = 'achievement-item ' + (isAchieved?'unlocked':'locked');
-        el.innerHTML = `
-          <span class="achievement-icon">${a.icon}</span>
-          <div class="achievement-info">
-            <div class="achievement-name">${a.name}</div>
-            <div class="achievement-desc">${a.cond}</div>
-          </div>
-          <span class="achievement-xp">${isAchieved?'✅':'　'}</span>`;
+        el.className = 'achievement-item ' + (isAchieved ? 'unlocked' : 'locked');
+        el.innerHTML =
+          '<span class="achievement-icon">' + a.icon + '</span>' +
+          '<div class="achievement-info">' +
+            '<div class="achievement-name">' + a.name + '</div>' +
+            '<div class="achievement-desc">' + a.cond + '</div>' +
+          '</div>' +
+          '<span class="achievement-xp">' + (isAchieved ? '✅' : '+'+a.xp+'XP') + '</span>';
         cont.appendChild(el);
       });
     }
@@ -1150,17 +1132,18 @@ function renderAchievements() {
 }
 function openDeckSelect(diffKey) {
   currentDifficulty = diffKey;
-  const unlocked = getUnlocked();
+  const rankEffects = getRankEffects(parseInt(localStorage.getItem('runefall_meta_xp')||'0'));
   const cont = document.getElementById('deck-cards');
   cont.innerHTML = '';
   DECK_PRESETS.forEach(p => {
-    const isLocked = p.unlock && !unlocked.includes(p.unlock);
+    const isLocked = p.unlock && !rankEffects.includes(p.unlock);
+    const unlockRank = p.unlock ? RANKS.find(r => r.effect === p.unlock) : null;
     const card = document.createElement('div');
     card.className = 'deck-card' + (p.id === currentDeckPreset ? ' selected' : '') + (isLocked ? ' locked' : '');
     card.innerHTML = `
       <span class="deck-card-icon">${isLocked ? '🔒' : p.icon}</span>
       <span class="deck-card-name">${p.name}</span>
-      <span class="deck-card-desc">${isLocked ? META_UNLOCKS.find(u=>u.id===p.unlock)?.desc ?? '?' : p.desc}</span>
+      <span class="deck-card-desc">${isLocked ? (unlockRank ? `Rank${unlockRank.rank}「${unlockRank.name}」で解放` : '？') : p.desc}</span>
       <span class="deck-card-tiles">${isLocked ? '？？？？？？' : Object.entries(p.tiles||{}).map(([id,n])=>TILE_DEFS.find(t=>t.id===id)?.icon.repeat(n)).join('')}</span>
       <span class="deck-card-combo">${isLocked ? '解放で使用可能' : '▶ '+p.combo}</span>
     `;
@@ -1181,7 +1164,7 @@ function initGame(diffKey = currentDifficulty, deckPresetId = currentDeckPreset)
   currentDeckPreset  = deckPresetId;
   localStorage.setItem('runefall_last_deck', deckPresetId);
   const d = DIFFICULTIES[diffKey] || DIFFICULTIES.normal;
-  const unlocked = getUnlocked();
+  const rankEffects = getRankEffects(parseInt(localStorage.getItem('runefall_meta_xp')||'0'));
   G = {
     screen:'title',
     floor:1,
@@ -1200,12 +1183,12 @@ function initGame(diffKey = currentDifficulty, deckPresetId = currentDeckPreset)
     totalDmg:0, totalHealed:0, comboCount:{},
     floorNoDamage: true, // 無傷の勇者実績用（フロア毎リセット）
     // メタ永続強化フラグ
-    metaRestBonus:     unlocked.includes('rest_heal')     ? 10 : 0,
-    metaShopDiscount:  unlocked.includes('shop_discount') ? 3  : 0,
-    metaBossPreview:   unlocked.includes('boss_preview'),
+    metaRestBonus:     rankEffects.includes('rest_bonus_5')  ? 5  : 0,
+    metaShopDiscount:  rankEffects.includes('shop_discount')  ? 3  : 0,
+    metaBossPreview:   rankEffects.includes('boss_preview'),
+    metaShopChoices:   rankEffects.includes('shop_choice_5')  ? 5  : 4,
   };
-  // 迅速の加護: 開始時Gold+10
-  if (unlocked.includes('speed_start')) G.player.gold += 10;
+  if (rankEffects.includes('speed_start')) G.player.gold += 10;
 }
 
 function buildStartDeck(presetId = 'balanced') {
@@ -1931,93 +1914,69 @@ function calcScore(cleared) {
 // 将来: engine/meta.js に分離
 RF.Meta = (() => {
 
-  // ── 実績定義（30種） ──
   const ACHIEVEMENTS = [
-    // 【進行】
-    { id:'reach_f4',          cat:'進行', icon:'🗺️', name:'中層突破',     cond:'F4以上に到達' },
-    { id:'reach_f7',          cat:'進行', icon:'🏔️', name:'最終層',       cond:'F7以上に到達' },
-    { id:'clear_easy',        cat:'進行', icon:'⭐', name:'初クリア',     cond:'EASYクリア' },
-    { id:'clear_normal',      cat:'進行', icon:'⭐', name:'真のクリア',   cond:'NORMALクリア' },
-    { id:'clear_hard',        cat:'進行', icon:'⭐', name:'深淵制覇',     cond:'HARDクリア' },
-    { id:'runs_5',            cat:'進行', icon:'🎒', name:'冒険者',       cond:'累計5ラン' },
-    { id:'runs_20',           cat:'進行', icon:'🧭', name:'ベテラン',     cond:'累計20ラン' },
-    { id:'runs_50',           cat:'進行', icon:'👑', name:'伝説の冒険者', cond:'累計50ラン' },
-    // 【コンボ】
-    { id:'combo_first',       cat:'コンボ', icon:'✨', name:'初コンボ',     cond:'初めてコンボを発動' },
-    { id:'combo_abyss',       cat:'コンボ', icon:'🌑', name:'深淵の詠唱',   cond:'Abyssを発動' },
-    { id:'combo_radiance',    cat:'コンボ', icon:'💫', name:'天光の詠唱',   cond:'Radianceを発動' },
-    { id:'combo_quake',       cat:'コンボ', icon:'🪨', name:'大地の怒り',   cond:'Earthquakeを発動' },
-    { id:'combo_tsunami',     cat:'コンボ', icon:'🌊', name:'大津波',       cond:'Tsunamiを発動' },
-    { id:'combo_10types',     cat:'コンボ', icon:'📚', name:'万能術師',     cond:'1ランで10種以上のコンボを発動' },
-    { id:'combo_all',         cat:'コンボ', icon:'🏆', name:'全呪文習得',   cond:'全27種のコンボを通算発動' },
-    // 【戦略】
-    { id:'no_damage',         cat:'戦略', icon:'🛡️', name:'無傷の勇者',   cond:'1フロアをHP減なしで突破' },
-    { id:'boss_kill',         cat:'戦略', icon:'🐉', name:'竜殺し',       cond:'ボスを倒す' },
-    { id:'deck_30',           cat:'戦略', icon:'📖', name:'大図書館',     cond:'デッキを30枚以上にする' },
-    { id:'gold_200',          cat:'戦略', icon:'💰', name:'大富豪',       cond:'1ランで200G以上所持' },
-    { id:'heal_total_500',    cat:'戦略', icon:'💚', name:'不死身',       cond:'通算回復量500以上' },
-    { id:'dmg_total_1000',    cat:'戦略', icon:'⚔️', name:'破壊者',       cond:'通算ダメージ1000以上' },
-    { id:'score_2000',        cat:'戦略', icon:'🌟', name:'神話の記録',   cond:'スコア2000以上' },
-    // 【デッキ】
-    { id:'deck_balanced_clear',cat:'デッキ', icon:'⚖️', name:'完全均衡',   cond:'バランスデッキでクリア' },
-    { id:'deck_aggro_clear',  cat:'デッキ', icon:'🔥', name:'炎の覇者',   cond:'攻撃特化でクリア' },
-    { id:'deck_sustain_clear',cat:'デッキ', icon:'💚', name:'不沈艦',     cond:'回復特化でクリア' },
-    { id:'deck_control_clear',cat:'デッキ', icon:'🌀', name:'鋼の守り',   cond:'妨害特化でクリア' },
-    { id:'deck_chaos_clear',  cat:'デッキ', icon:'🎲', name:'混沌制覇',   cond:'混沌デッキでクリア' },
-    { id:'deck_ancient_clear',cat:'デッキ', icon:'📜', name:'古代の力',   cond:'古代デッキでクリア' },
-    // 【スコア】
-    { id:'score_500',         cat:'スコア', icon:'📊', name:'冒険の記録', cond:'スコア500以上' },
-    { id:'score_1000',        cat:'スコア', icon:'📈', name:'伝説の記録', cond:'スコア1000以上' },
+    { id:'reach_f4',           cat:'進行', icon:'🗺️', name:'中層突破',     cond:'F4以上に到達',          xp:10  },
+    { id:'reach_f7',           cat:'進行', icon:'🏔️', name:'最終層',       cond:'F7以上に到達',          xp:20  },
+    { id:'clear_easy',         cat:'進行', icon:'⭐', name:'初クリア',     cond:'EASYクリア',            xp:30  },
+    { id:'clear_normal',       cat:'進行', icon:'⭐', name:'真のクリア',   cond:'NORMALクリア',          xp:60  },
+    { id:'clear_hard',         cat:'進行', icon:'⭐', name:'深淵制覇',     cond:'HARDクリア',            xp:120 },
+    { id:'runs_5',             cat:'進行', icon:'🎒', name:'冒険者',       cond:'累計5ラン',             xp:15  },
+    { id:'runs_20',            cat:'進行', icon:'🧭', name:'ベテラン',     cond:'累計20ラン',            xp:40  },
+    { id:'runs_50',            cat:'進行', icon:'👑', name:'伝説の冒険者', cond:'累計50ラン',            xp:100 },
+    { id:'combo_first',        cat:'コンボ', icon:'✨', name:'初コンボ',   cond:'初めてコンボを発動',    xp:5   },
+    { id:'combo_abyss',        cat:'コンボ', icon:'🌑', name:'深淵の詠唱', cond:'Abyssを発動',           xp:20  },
+    { id:'combo_radiance',     cat:'コンボ', icon:'💫', name:'天光の詠唱', cond:'Radianceを発動',        xp:20  },
+    { id:'combo_quake',        cat:'コンボ', icon:'🪨', name:'大地の怒り', cond:'Earthquakeを発動',      xp:20  },
+    { id:'combo_tsunami',      cat:'コンボ', icon:'🌊', name:'大津波',     cond:'Tsunamiを発動',         xp:20  },
+    { id:'combo_10types',      cat:'コンボ', icon:'📚', name:'万能術師',   cond:'1ランで10種以上発動',   xp:30  },
+    { id:'combo_all',          cat:'コンボ', icon:'🏆', name:'全呪文習得', cond:'全27種のコンボを通算発動', xp:150 },
+    { id:'no_damage',          cat:'戦略', icon:'🛡️', name:'無傷の勇者',  cond:'1フロアHP減なし突破',   xp:20  },
+    { id:'boss_kill',          cat:'戦略', icon:'🐉', name:'竜殺し',      cond:'ボスを倒す',             xp:25  },
+    { id:'deck_30',            cat:'戦略', icon:'📖', name:'大図書館',    cond:'デッキを30枚以上にする', xp:15  },
+    { id:'gold_200',           cat:'戦略', icon:'💰', name:'大富豪',      cond:'1ランで200G以上所持',    xp:20  },
+    { id:'heal_total_500',     cat:'戦略', icon:'💚', name:'不死身',      cond:'通算回復量500以上',      xp:30  },
+    { id:'dmg_total_1000',     cat:'戦略', icon:'⚔️', name:'破壊者',      cond:'通算ダメージ1000以上',   xp:30  },
+    { id:'score_2000',         cat:'戦略', icon:'🌟', name:'神話の記録',  cond:'スコア2000以上',         xp:60  },
+    { id:'deck_balanced_clear',cat:'デッキ', icon:'⚖️', name:'完全均衡',  cond:'バランスデッキでクリア', xp:25  },
+    { id:'deck_aggro_clear',   cat:'デッキ', icon:'🔥', name:'炎の覇者',  cond:'攻撃特化でクリア',       xp:30  },
+    { id:'deck_sustain_clear', cat:'デッキ', icon:'💚', name:'不沈艦',    cond:'回復特化でクリア',       xp:25  },
+    { id:'deck_control_clear', cat:'デッキ', icon:'🌀', name:'鋼の守り',  cond:'妨害特化でクリア',       xp:30  },
+    { id:'deck_chaos_clear',   cat:'デッキ', icon:'🎲', name:'混沌制覇',  cond:'混沌デッキでクリア',     xp:50  },
+    { id:'deck_ancient_clear', cat:'デッキ', icon:'📜', name:'古代の力',  cond:'古代デッキでクリア',     xp:50  },
+    { id:'score_500',          cat:'スコア', icon:'📊', name:'冒険の記録', cond:'スコア500以上',         xp:15  },
+    { id:'score_1000',         cat:'スコア', icon:'📈', name:'伝説の記録', cond:'スコア1000以上',        xp:35  },
   ];
 
   function calcMetaXP(cleared) {
-    let xp = 10;
-    if (G.floor >= 4) xp += 20;
-    if (G.floor >= 7) xp += 40;
-    if (cleared)      xp += 80;
+    let xp = 3;
+    if (G.floor >= 4) xp += 5;
+    if (G.floor >= 7) xp += 10;
+    if (cleared)      xp += 20;
     const comboTypes = Object.keys(G.comboCount || {}).length;
-    if (comboTypes >= 5)  xp += 15;
-    if ((G.comboCount || {})['Abyss']) xp += 20;
-    if (cleared && G.difficulty === 'normal') xp += 30;
-    if (cleared && G.difficulty === 'hard')   xp += 70;
+    if (comboTypes >= 5)  xp += 3;
+    if ((G.comboCount || {})['Abyss']) xp += 5;
+    if (cleared && G.difficulty === 'normal') xp += 8;
+    if (cleared && G.difficulty === 'hard')   xp += 20;
     return xp;
-  }
-
-  function checkUnlocks(prevXp, totalXp) {
-    const unlocked = JSON.parse(localStorage.getItem('runefall_unlocks') || '[]');
-    let newUnlock = null;
-    for (const u of META_UNLOCKS) {
-      if (u.xp > prevXp && u.xp <= totalXp && !unlocked.includes(u.id)) {
-        unlocked.push(u.id);
-        newUnlock = u;
-      }
-    }
-    localStorage.setItem('runefall_unlocks', JSON.stringify(unlocked));
-    if (newUnlock) setTimeout(() => showToast(`${newUnlock.icon} 解放！「${newUnlock.name}」`, 3500), 800);
   }
 
   function checkAchievements(cleared, score) {
     const achieved  = JSON.parse(localStorage.getItem('runefall_achievements') || '[]');
     const runs      = parseInt(localStorage.getItem('runefall_total_runs') || '0');
     const allCombos = JSON.parse(localStorage.getItem('runefall_all_combos') || '[]');
-    // 通算統計を更新
     const prevDmg    = parseInt(localStorage.getItem('runefall_total_dmg')    || '0');
     const prevHealed = parseInt(localStorage.getItem('runefall_total_healed') || '0');
     const newDmg    = prevDmg    + (G.totalDmg    || 0);
     const newHealed = prevHealed + (G.totalHealed || 0);
     localStorage.setItem('runefall_total_dmg',    String(newDmg));
     localStorage.setItem('runefall_total_healed', String(newHealed));
-    // 通算コンボセットを更新
     const comboSet = new Set(allCombos);
     Object.keys(G.comboCount || {}).forEach(c => comboSet.add(c));
     localStorage.setItem('runefall_all_combos', JSON.stringify([...comboSet]));
-
     const newAchievements = [];
     const check = (id, cond) => {
       if (!achieved.includes(id) && cond) { achieved.push(id); newAchievements.push(id); }
     };
-
-    // 【進行】
     check('reach_f4',          G.floor >= 4);
     check('reach_f7',          G.floor >= 7);
     check('clear_easy',        cleared && G.difficulty === 'easy');
@@ -2026,7 +1985,6 @@ RF.Meta = (() => {
     check('runs_5',            runs >= 5);
     check('runs_20',           runs >= 20);
     check('runs_50',           runs >= 50);
-    // 【コンボ】
     check('combo_first',       Object.keys(G.comboCount||{}).length >= 1);
     check('combo_abyss',       !!(G.comboCount||{})['Abyss']);
     check('combo_radiance',    !!(G.comboCount||{})['Radiance']);
@@ -2034,40 +1992,96 @@ RF.Meta = (() => {
     check('combo_tsunami',     !!(G.comboCount||{})['Tsunami']);
     check('combo_10types',     Object.keys(G.comboCount||{}).length >= 10);
     check('combo_all',         comboSet.size >= 27);
-    // 【戦略】
     check('boss_kill',         cleared);
     check('deck_30',           (G.deck||[]).length >= 30);
     check('gold_200',          (G.player?.gold||0) >= 200);
     check('heal_total_500',    newHealed >= 500);
     check('dmg_total_1000',    newDmg >= 1000);
     check('score_2000',        score >= 2000);
-    // 【デッキ】
     check('deck_balanced_clear', cleared && G.deckPreset === 'balanced');
     check('deck_aggro_clear',    cleared && G.deckPreset === 'aggro');
     check('deck_sustain_clear',  cleared && G.deckPreset === 'sustain');
     check('deck_control_clear',  cleared && G.deckPreset === 'control');
     check('deck_chaos_clear',    cleared && G.deckPreset === 'chaos');
     check('deck_ancient_clear',  cleared && G.deckPreset === 'ancient');
-    // 【スコア】
     check('score_500',  score >= 500);
     check('score_1000', score >= 1000);
-
     if (newAchievements.length > 0) {
       localStorage.setItem('runefall_achievements', JSON.stringify(achieved));
-      // 新実績をトーストで通知（複数あれば最初の1件）
+      const bonusXp = newAchievements.reduce((s, id) => {
+        const a = ACHIEVEMENTS.find(a => a.id === id);
+        return s + (a?.xp || 0);
+      }, 0);
+      if (bonusXp > 0) {
+        const cur = parseInt(localStorage.getItem('runefall_meta_xp') || '0');
+        localStorage.setItem('runefall_meta_xp', String(cur + bonusXp));
+      }
       const first = ACHIEVEMENTS.find(a => a.id === newAchievements[0]);
-      if (first) setTimeout(() => showToast(`${first.icon} 実績解除「${first.name}」`, 3000), 1500);
+      if (first) setTimeout(() => showToast(
+        first.icon + ' 実績「' + first.name + '」+' + first.xp + 'XP', 3000
+      ), 1500);
     }
   }
 
-  function getUnlocked()  { return JSON.parse(localStorage.getItem('runefall_unlocks')      || '[]'); }
-  function getAchieved()  { return JSON.parse(localStorage.getItem('runefall_achievements') || '[]'); }
-
-  return { ACHIEVEMENTS, calcMetaXP, checkUnlocks, checkAchievements, getUnlocked, getAchieved };
+  function getAchieved() { return JSON.parse(localStorage.getItem('runefall_achievements') || '[]'); }
+  return { ACHIEVEMENTS, calcMetaXP, checkAchievements, getAchieved };
 })();
 
-// ── デストラクチャリング展開（RF.Meta）────────────────────────────
-const { ACHIEVEMENTS, calcMetaXP, checkUnlocks, checkAchievements, getUnlocked, getAchieved } = RF.Meta;
+// ── RF.Rank: ランクシステム ──────────────────────────────────────
+// 将来: engine/rank.js に分離
+// 拡張方法: RANKSにオブジェクトを追加し、新effectはapplyRankEffects()に処理を追加するだけ
+RF.Rank = (() => {
+  const RANKS = [
+    { rank:1, xp:0,    name:'見習い冒険者', title:'見習い',    effect:null            , desc:'初期状態。称号はここから表示される。' },
+    { rank:2, xp:50,   name:'冒険者',       title:'冒険者',    effect:'shop_choice_5' , desc:'ショップのタイル選択肢が4→5枚に増加' },
+    { rank:3, xp:150,  name:'熟練冒険者',   title:'熟練者',    effect:'rest_bonus_5'  , desc:'休憩の回復量+5（30→35）' },
+    { rank:4, xp:350,  name:'ベテラン冒険者',title:'ベテラン',  effect:'deck_chaos'    , desc:'混沌デッキを解放' },
+    { rank:5, xp:700,  name:'精鋭冒険者',   title:'精鋭',      effect:'deck_ancient'  , desc:'古代デッキを解放' },
+    { rank:6, xp:1200, name:'伝説の冒険者', title:'伝説',      effect:'diff_void'     , desc:'VOID難易度を解放（敵HP×1.3・スコア×2.0）' },
+    { rank:7, xp:2000, name:'魔導の覇者',   title:'覇者',      effect:'title_special' , desc:'特別称号と演出が解放される' },
+    // 将来追加候補（データ追加 + applyRankEffects()に処理追加のみで機能する）
+    // { rank:8, xp:3500, name:'魔術の探求者', title:'探求者', effect:'combo_xp_bonus', desc:'コンボ発動時のXP獲得+2' },
+    // { rank:9, xp:5500, name:'深淵の覇者',   title:'覇者',  effect:'boss_gold_30',   desc:'ボス撃破時Gold+30' },
+    // { rank:10,xp:8000, name:'伝説の魔導士', title:'魔導士',effect:'legendary_title',desc:'伝説の称号が永続表示される' },
+  ];
+
+  function getCurrentRank(totalXp) {
+    return [...RANKS].reverse().find(r => totalXp >= r.xp) || RANKS[0];
+  }
+
+  function getRankTitle(totalXp) {
+    return getCurrentRank(totalXp).title;
+  }
+
+  function checkRankUp(prevXp, totalXp) {
+    const prevRank = getCurrentRank(prevXp);
+    const newRank  = getCurrentRank(totalXp);
+    if (newRank.rank > prevRank.rank) {
+      applyRankEffects(newRank);
+      setTimeout(() => showToast(
+        `🎖️ Rank${newRank.rank}「${newRank.name}」に昇格！`, 4000
+      ), 1200);
+    }
+  }
+
+  function applyRankEffects(rank) {
+    // effectキーに対応する永続強化を適用
+    // ※ ゲーム内への反映はinitGame()でgetRankEffects()を呼ぶことで行う
+    // 新effectを追加する場合はここにcaseを追記するだけでよい
+  }
+
+  // 現在ランクまでに有効な全effectキーを返す
+  function getRankEffects(totalXp) {
+    const cur = getCurrentRank(totalXp);
+    return RANKS.filter(r => r.rank <= cur.rank && r.effect).map(r => r.effect);
+  }
+
+  return { RANKS, getCurrentRank, getRankTitle, checkRankUp, getRankEffects };
+})();
+
+// ── デストラクチャリング展開（RF.Meta / RF.Rank）────────────────────
+const { ACHIEVEMENTS, calcMetaXP, checkAchievements, getAchieved }             = RF.Meta;
+const { RANKS, getCurrentRank, getRankTitle, checkRankUp, getRankEffects }      = RF.Rank;
 
 // ── saveScore: スコア保存・メタXP・実績チェック ──
 function saveScore(cleared) {
@@ -2082,7 +2096,7 @@ function saveScore(cleared) {
   const prevXp  = parseInt(localStorage.getItem('runefall_meta_xp') || '0');
   const totalXp = prevXp + xp;
   localStorage.setItem('runefall_meta_xp', String(totalXp));
-  checkUnlocks(prevXp, totalXp);
+  checkRankUp(prevXp, totalXp);   // META_UNLOCKSの代わりにランクアップチェック
   checkAchievements(cleared, score);
 
   return { score, prev, isNew: score > prev };
@@ -2109,11 +2123,15 @@ function renderScoreBoard(containerId, cleared) {
 function updateTitleBestScores() {
   const el = document.getElementById('title-best-scores');
   if (!el) return;
+  const totalXp = parseInt(localStorage.getItem('runefall_meta_xp') || '0');
+  const rank    = getCurrentRank(totalXp);
   const parts = Object.entries(DIFFICULTIES).map(([k,d]) => {
     const b = parseInt(localStorage.getItem(`runefall_best_${k}`) || '0');
     return b > 0 ? `${d.label} <span>${b.toLocaleString()}</span>` : null;
   }).filter(Boolean);
-  el.innerHTML = parts.length ? parts.join(' &nbsp;|&nbsp; ') : '';
+  const scoreHtml = parts.length ? parts.join(' &nbsp;|&nbsp; ') : '';
+  // Rank1から称号を表示
+  el.innerHTML = `<span style="color:var(--accent2);font-family:'Cinzel',serif;font-size:12px">【${rank.title}】</span>${scoreHtml ? '&nbsp; ' + scoreHtml : ''}`;
 }
 
 // ── ランダムイベント ──
@@ -2157,9 +2175,9 @@ function buildRewardTiles(id,tiles,onPick){
 RF.Shop = (() => {
   function openShop(){
     advanceFloor();
-    const price = SHOP_PRICE - (G.metaShopDiscount||0);
+    const price   = SHOP_PRICE - (G.metaShopDiscount||0);
+    const choices = shuffle([...TILE_DEFS]).slice(0, G.metaShopChoices || 4);
     document.getElementById('shop-gold').textContent=G.player.gold;
-    const choices=shuffle([...TILE_DEFS]).slice(0,4);
     const cont=document.getElementById('shop-tiles'); cont.innerHTML='';
     for(const t of choices){
       const el=document.createElement('div'); el.className='reward-tile';
@@ -2233,7 +2251,8 @@ function openDeck(){
 
 function openRest(){
   advanceFloor();
-  G.player.hp=Math.min(G.player.maxHp, G.player.hp + 30 + (G.metaRestBonus||0));
+  const bonus = G.metaRestBonus || 0;
+  G.player.hp = Math.min(G.player.maxHp, G.player.hp + 30 + bonus);
   showScreen('rest');
 }
 
