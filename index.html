@@ -602,189 +602,264 @@ html, body {
 <script>
 'use strict';
 
-const TILE_DEFS = [
-  { id:'fire',  icon:'🔥', name:'炎',  power:3, color:'#ff6633' },
-  { id:'water', icon:'💧', name:'水',  power:2, color:'#3399ff' },
-  { id:'wind',  icon:'💨', name:'風',  power:2, color:'#66dd88' },
-  { id:'earth', icon:'🪨', name:'土',  power:4, color:'#cc9944' },
-  { id:'light', icon:'✨', name:'光',  power:2, color:'#ffdd44' },
-  { id:'dark',  icon:'🌑', name:'闇',  power:3, color:'#9944cc' },
-];
+// ══════════════════════════════════════════════════════════════════
+// RF（Runefall）名前空間
+// 単一ファイル内での論理的モジュール化。
+// 将来のファイル分離時は各IIFEブロックを個別JSファイルに移動し、
+// デストラクチャリング展開行を import 文に1行置換するだけで対応可能。
+// ══════════════════════════════════════════════════════════════════
+const RF = {};
 
-const SPELL_COMBOS = [
-  { key:'fire,fire,fire',  name:'Inferno',    dmg:15, heal:0,  effect:'burn',   desc:'敵を燃焼させる' },
-  { key:'wind,wind,wind',  name:'Tornado',    dmg:12, heal:0,  effect:'sweep',  desc:'全体を吹き飛ばす' },
-  { key:'earth,earth',     name:'Boulder',    dmg:10, heal:0,  effect:'stun',   desc:'敵を気絶させる' },
-  { key:'light,light',     name:'Holy Light', dmg:0,  heal:18, effect:'heal',   desc:'HPを18回復' },
-  { key:'dark,light',      name:'Eclipse',    dmg:12, heal:0,  effect:'curse',  desc:'呪いをかける' },
-  { key:'water,wind',      name:'Storm',      dmg:8,  heal:0,  effect:'slow',   desc:'敵を鈍化させる' },
-  { key:'fire,water',      name:'Steam',      dmg:6,  heal:0,  effect:'blind',  desc:'敵を盲目にする' },
-  { key:'earth,light',     name:'Gaia Beam',  dmg:11, heal:0,  effect:'pierce', desc:'防御を貫通する' },
-  { key:'dark,fire',       name:'Hellfire',   dmg:13, heal:0,  effect:'burn',   desc:'地獄の炎' },
-  { key:'water,water',     name:'Flood',      dmg:9,  heal:4,  effect:'wet',    desc:'少し回復する' },
-  { key:'dark,dark,dark',  name:'Abyss',      dmg:18, heal:0,  effect:'curse',  desc:'深淵の力' },
-  // 新コンボ呪文（6種追加）
-  { key:'fire,fire',       name:'Ember',      dmg:8,  heal:0,  effect:'burn',   desc:'小さな炎・燃焼付与' },
-  { key:'wind,wind',       name:'Gust',       dmg:7,  heal:0,  effect:'slow',   desc:'風の刃・鈍化付与' },
-  { key:'earth,water',     name:'Mud Trap',   dmg:8,  heal:0,  effect:'stun',   desc:'泥沼に嵌めて気絶' },
-  { key:'dark,earth',      name:'Void Crush', dmg:11, heal:0,  effect:'curse',  desc:'虚無の重圧' },
-  { key:'light,water',     name:'Cleanse',    dmg:0,  heal:12, effect:'heal',   desc:'浄化の水・HP12回復' },
-  { key:'fire,wind',       name:'Wildfire',   dmg:10, heal:0,  effect:'burn',   desc:'飛び火・広域燃焼' },
-  // 2枚未使用7種
-  { key:'earth,fire',      name:'Magma',       dmg:11, heal:0,  effect:'burn',   desc:'溶岩流・燃焼付与' },
-  { key:'fire,light',      name:'Sacred Fire', dmg:9,  heal:6,  effect:'heal',   desc:'聖なる炎・HP6回復' },
-  { key:'dark,water',      name:'Miasma',      dmg:9,  heal:0,  effect:'slow',   desc:'瘴気の霧・鈍化付与' },
-  { key:'earth,wind',      name:'Sandstorm',   dmg:9,  heal:0,  effect:'blind',  desc:'砂嵐・盲目付与' },
-  { key:'light,wind',      name:'Zephyr',      dmg:8,  heal:4,  effect:'slow',   desc:'聖風・小回復+鈍化' },
-  { key:'dark,wind',       name:'Hex Gale',    dmg:10, heal:0,  effect:'curse',  desc:'呪いの嵐' },
-  { key:'dark,dark',       name:'Shadow',      dmg:8,  heal:0,  effect:'curse',  desc:'深き影・呪い付与' },
-  // 3枚同属性（未使用3種）
-  { key:'water,water,water', name:'Tsunami',   dmg:14, heal:6,  effect:'wet',    desc:'大津波・HP6回復' },
-  { key:'earth,earth,earth', name:'Earthquake',dmg:16, heal:0,  effect:'stun',   desc:'大地震・気絶' },
-  { key:'light,light,light', name:'Radiance',  dmg:0,  heal:28, effect:'heal',   desc:'天光・HP28大回復' },
-];
+// ── RF.Tiles: タイル属性・パーティクルカラー定義 ────────────────
+// 将来: data/tiles.js に分離
+RF.Tiles = (() => {
+  const TILE_DEFS = [
+    { id:'fire',  icon:'🔥', name:'炎',  power:3, color:'#ff6633' },
+    { id:'water', icon:'💧', name:'水',  power:2, color:'#3399ff' },
+    { id:'wind',  icon:'💨', name:'風',  power:2, color:'#66dd88' },
+    { id:'earth', icon:'🪨', name:'土',  power:4, color:'#cc9944' },
+    { id:'light', icon:'✨', name:'光',  power:2, color:'#ffdd44' },
+    { id:'dark',  icon:'🌑', name:'闇',  power:3, color:'#9944cc' },
+  ];
+  const PARTICLE_COLORS = {
+    fire:  ['#ff6633','#ffaa44','#ff3300'],
+    water: ['#3399ff','#aaddff','#0066cc'],
+    wind:  ['#66dd88','#ccffcc','#33bb55'],
+    earth: ['#cc9944','#ffcc66','#aa7722'],
+    light: ['#ffdd44','#ffffff','#ffee88'],
+    dark:  ['#9944cc','#cc88ff','#6600aa'],
+  };
+  return { TILE_DEFS, PARTICLE_COLORS };
+})();
 
-const UPGRADE_DEFS = [
-  { id:'hp_up',   name:'体力強化',   icon:'❤️', baseCost:20, maxLv:3, desc:lv=>`最大HP +${lv*20}`,    apply:(G,lv)=>{ G.player.maxHp=G.diffConf.playerHp+lv*20; G.player.hp=Math.min(G.player.hp,G.player.maxHp); } },
-  { id:'atk_up',  name:'攻撃強化',   icon:'⚔️', baseCost:25, maxLv:3, desc:lv=>`全ダメージ +${lv*2}`, apply:(G,lv)=>{ G.player.atkBonus=lv*2; } },
-  { id:'heal_up', name:'回復強化',   icon:'💚', baseCost:20, maxLv:2, desc:lv=>`回復量 +${lv*6}`,     apply:(G,lv)=>{ G.player.healBonus=lv*6; } },
-  { id:'gold_up', name:'財宝の加護', icon:'💰', baseCost:15, maxLv:2, desc:lv=>`Gold獲得 +${lv*30}%`, apply:(G,lv)=>{ G.player.goldRate=G.diffConf.goldMult+lv*0.3; } },
-  { id:'hand_up', name:'手札拡張',   icon:'🎴', baseCost:30, maxLv:2, desc:lv=>`手札 +${lv}枚`,       apply:(G,lv)=>{ G.player.handSize=G.diffConf.handSize+lv; } },
-];
+// ── RF.Spells: コンボ呪文・エフェクト設定・デッキヒント ──────────
+// 将来: data/spells.js に分離
+RF.Spells = (() => {
+  const SPELL_COMBOS = [
+    { key:'fire,fire,fire',  name:'Inferno',    dmg:15, heal:0,  effect:'burn',   desc:'敵を燃焼させる' },
+    { key:'wind,wind,wind',  name:'Tornado',    dmg:12, heal:0,  effect:'sweep',  desc:'全体を吹き飛ばす' },
+    { key:'earth,earth',     name:'Boulder',    dmg:10, heal:0,  effect:'stun',   desc:'敵を気絶させる' },
+    { key:'light,light',     name:'Holy Light', dmg:0,  heal:18, effect:'heal',   desc:'HPを18回復' },
+    { key:'dark,light',      name:'Eclipse',    dmg:12, heal:0,  effect:'curse',  desc:'呪いをかける' },
+    { key:'water,wind',      name:'Storm',      dmg:8,  heal:0,  effect:'slow',   desc:'敵を鈍化させる' },
+    { key:'fire,water',      name:'Steam',      dmg:6,  heal:0,  effect:'blind',  desc:'敵を盲目にする' },
+    { key:'earth,light',     name:'Gaia Beam',  dmg:11, heal:0,  effect:'pierce', desc:'防御を貫通する' },
+    { key:'dark,fire',       name:'Hellfire',   dmg:13, heal:0,  effect:'burn',   desc:'地獄の炎' },
+    { key:'water,water',     name:'Flood',      dmg:9,  heal:4,  effect:'wet',    desc:'少し回復する' },
+    { key:'dark,dark,dark',  name:'Abyss',      dmg:18, heal:0,  effect:'curse',  desc:'深淵の力' },
+    { key:'fire,fire',       name:'Ember',      dmg:8,  heal:0,  effect:'burn',   desc:'小さな炎・燃焼付与' },
+    { key:'wind,wind',       name:'Gust',       dmg:7,  heal:0,  effect:'slow',   desc:'風の刃・鈍化付与' },
+    { key:'earth,water',     name:'Mud Trap',   dmg:8,  heal:0,  effect:'stun',   desc:'泥沼に嵌めて気絶' },
+    { key:'dark,earth',      name:'Void Crush', dmg:11, heal:0,  effect:'curse',  desc:'虚無の重圧' },
+    { key:'light,water',     name:'Cleanse',    dmg:0,  heal:12, effect:'heal',   desc:'浄化の水・HP12回復' },
+    { key:'fire,wind',       name:'Wildfire',   dmg:10, heal:0,  effect:'burn',   desc:'飛び火・広域燃焼' },
+    { key:'earth,fire',      name:'Magma',      dmg:11, heal:0,  effect:'burn',   desc:'溶岩流・燃焼付与' },
+    { key:'fire,light',      name:'Sacred Fire',dmg:9,  heal:6,  effect:'heal',   desc:'聖なる炎・HP6回復' },
+    { key:'dark,water',      name:'Miasma',     dmg:9,  heal:0,  effect:'slow',   desc:'瘴気の霧・鈍化付与' },
+    { key:'earth,wind',      name:'Sandstorm',  dmg:9,  heal:0,  effect:'blind',  desc:'砂嵐・盲目付与' },
+    { key:'light,wind',      name:'Zephyr',     dmg:8,  heal:4,  effect:'slow',   desc:'聖風・小回復+鈍化' },
+    { key:'dark,wind',       name:'Hex Gale',   dmg:10, heal:0,  effect:'curse',  desc:'呪いの嵐' },
+    { key:'dark,dark',       name:'Shadow',     dmg:8,  heal:0,  effect:'curse',  desc:'深き影・呪い付与' },
+    { key:'water,water,water', name:'Tsunami',  dmg:14, heal:6,  effect:'wet',    desc:'大津波・HP6回復' },
+    { key:'earth,earth,earth', name:'Earthquake',dmg:16,heal:0,  effect:'stun',   desc:'大地震・気絶' },
+    { key:'light,light,light', name:'Radiance', dmg:0,  heal:28, effect:'heal',   desc:'天光・HP28大回復' },
+  ];
+  const COMBO_HINTS = [
+    { name:'Inferno',    id:'fire',  need:3 },
+    { name:'Tornado',    id:'wind',  need:3 },
+    { name:'Abyss',      id:'dark',  need:3 },
+    { name:'Boulder',    id:'earth', need:2 },
+    { name:'Holy Light', id:'light', need:2 },
+    { name:'Eclipse',    id:'dark',  need:1, id2:'light', need2:1 },
+    { name:'Storm',      id:'water', need:1, id2:'wind',  need2:1 },
+    { name:'Hellfire',   id:'dark',  need:1, id2:'fire',  need2:1 },
+    { name:'Ember',      id:'fire',  need:2 },
+    { name:'Gust',       id:'wind',  need:2 },
+    { name:'Mud Trap',   id:'earth', need:1, id2:'water', need2:1 },
+    { name:'Void Crush', id:'dark',  need:1, id2:'earth', need2:1 },
+    { name:'Cleanse',    id:'light', need:1, id2:'water', need2:1 },
+    { name:'Wildfire',   id:'fire',  need:1, id2:'wind',  need2:1 },
+    { name:'Magma',      id:'earth', need:1, id2:'fire',  need2:1 },
+    { name:'Sacred Fire',id:'fire',  need:1, id2:'light', need2:1 },
+    { name:'Miasma',     id:'dark',  need:1, id2:'water', need2:1 },
+    { name:'Sandstorm',  id:'earth', need:1, id2:'wind',  need2:1 },
+    { name:'Zephyr',     id:'light', need:1, id2:'wind',  need2:1 },
+    { name:'Hex Gale',   id:'dark',  need:1, id2:'wind',  need2:1 },
+    { name:'Shadow',     id:'dark',  need:2 },
+    { name:'Tsunami',    id:'water', need:3 },
+    { name:'Earthquake', id:'earth', need:3 },
+    { name:'Radiance',   id:'light', need:3 },
+  ];
+  return { SPELL_COMBOS, COMBO_HINTS };
+})();
 
-const COMBO_HINTS = [
-  { name:'Inferno',    id:'fire',  need:3 },
-  { name:'Tornado',    id:'wind',  need:3 },
-  { name:'Abyss',      id:'dark',  need:3 },
-  { name:'Boulder',    id:'earth', need:2 },
-  { name:'Holy Light', id:'light', need:2 },
-  { name:'Eclipse',    id:'dark',  need:1, id2:'light', need2:1 },
-  { name:'Storm',      id:'water', need:1, id2:'wind',  need2:1 },
-  { name:'Hellfire',   id:'dark',  need:1, id2:'fire',  need2:1 },
-  { name:'Ember',      id:'fire',  need:2 },
-  { name:'Gust',       id:'wind',  need:2 },
-  { name:'Mud Trap',   id:'earth', need:1, id2:'water', need2:1 },
-  { name:'Void Crush', id:'dark',  need:1, id2:'earth', need2:1 },
-  { name:'Cleanse',    id:'light', need:1, id2:'water', need2:1 },
-  { name:'Wildfire',   id:'fire',  need:1, id2:'wind',  need2:1 },
-  { name:'Magma',      id:'earth', need:1, id2:'fire',  need2:1 },
-  { name:'Sacred Fire',id:'fire',  need:1, id2:'light', need2:1 },
-  { name:'Miasma',     id:'dark',  need:1, id2:'water', need2:1 },
-  { name:'Sandstorm',  id:'earth', need:1, id2:'wind',  need2:1 },
-  { name:'Zephyr',     id:'light', need:1, id2:'wind',  need2:1 },
-  { name:'Hex Gale',   id:'dark',  need:1, id2:'wind',  need2:1 },
-  { name:'Shadow',     id:'dark',  need:2 },
-  { name:'Tsunami',    id:'water', need:3 },
-  { name:'Earthquake', id:'earth', need:3 },
-  { name:'Radiance',   id:'light', need:3 },
-];
+// ── RF.Enemies: 敵パラメータ・ボス定義・ボス特殊行動 ─────────────
+// 将来: data/enemies.js に分離
+RF.Enemies = (() => {
+  const ENEMIES = [
+    { name:'スライム',   icon:'🟢', maxHp:18,  atk:3,  gold:8  },
+    { name:'ゴブリン',   icon:'👺', maxHp:28,  atk:5,  gold:12 },
+    { name:'スケルトン', icon:'💀', maxHp:38,  atk:7,  gold:16 },
+    { name:'オーガ',     icon:'👹', maxHp:52,  atk:10, gold:22 },
+    { name:'魔竜',       icon:'🐉', maxHp:90,  atk:14, gold:60 },
+  ];
+  const BOSS_DEF = {
+    name:'魔竜', icon:'🐉', maxHp:110, atk:11, gold:60,
+  };
+  function getBossAction() {
+    const hp = G.enemy.hp / G.enemy.maxHp;
+    const t  = G.enemy.turn || 0;
+    if (hp <= 0.4 && !G.enemy.enraged) {
+      G.enemy.enraged = true;
+      G.enemy.atk = Math.floor(G.enemy.atk * 1.8);
+      return { type:'enrage', msg:'魔竜が激怒した！攻撃力が跳ね上がる！' };
+    }
+    if (t > 0 && t % 3 === 0) {
+      return { type:'breath', msg:'魔竜が炎を吐いた！', dmgMult:1.6, effect:'burn' };
+    }
+    if (t > 0 && t % 5 === 0) {
+      return { type:'roar', msg:'咆哮でルーンが乱れた！手牌がシャッフルされる' };
+    }
+    return { type:'normal' };
+  }
+  return { ENEMIES, BOSS_DEF, getBossAction };
+})();
 
-const ENEMIES = [
-  { name:'スライム',   icon:'🟢', maxHp:18,  atk:3,  gold:8  },
-  { name:'ゴブリン',   icon:'👺', maxHp:28,  atk:5,  gold:12 },
-  { name:'スケルトン', icon:'💀', maxHp:38,  atk:7,  gold:16 },
-  { name:'オーガ',     icon:'👹', maxHp:52,  atk:10, gold:22 },
-  { name:'魔竜',       icon:'🐉', maxHp:90,  atk:14, gold:60 },
-];
-
-const DIFFICULTIES = {
-  easy:   { label:'EASY',   atkMult:0.7, hpMult:0.8, playerHp:100, handSize:6, deckLimit:999, goldMult:1.2, spellComboKey:'runefall_best_easy'   },
-  normal: { label:'NORMAL', atkMult:1.0, hpMult:1.0, playerHp:80,  handSize:6, deckLimit:999, goldMult:1.0, spellComboKey:'runefall_best_normal' },
-  hard:   { label:'HARD',   atkMult:1.0, hpMult:1.1, playerHp:80,  handSize:6, deckLimit:20,  goldMult:0.8, spellComboKey:'runefall_best_hard'   },
-};
-
-const RANDOM_EVENTS = [
-  {
-    id:'blessing', icon:'🌟', name:'祝福の泉',
-    desc:'手持ちタイルを1枚選んでパワーを+1強化します。',
-    canDecline:true,
-    onAccept(G) {
-      // 報酬画面を流用してタイル選択
-      const choices = [...new Map(G.deck.map(t=>[t.id,t])).values()];
-      buildRewardTiles('reward-tiles', choices.slice(0,4), tile => {
-        G.deck.forEach(t => { if(t.id===tile.id) t.power++; });
-        showScreen('map');
-      });
-      document.getElementById('reward-title').textContent = '🌟 祝福の泉';
-      document.getElementById('reward-sub').textContent   = '強化するタイルを1枚選択';
-      showScreen('reward');
-    },
-  },
-  {
-    id:'curse', icon:'💀', name:'呪いの祭壇',
-    desc:`HP-20と引き換えに、強力なタイルを1枚入手します。`,
-    canDecline:true,
-    onAccept(G) {
-      G.player.hp = Math.max(1, G.player.hp - 20);
-      const pool = shuffle([...TILE_DEFS]).slice(0,3);
-      buildRewardTiles('reward-tiles', pool, tile => { G.deck.push({...tile}); showScreen('map'); });
-      document.getElementById('reward-title').textContent = '💀 呪いの代償';
-      document.getElementById('reward-sub').textContent   = 'タイルを1枚獲得（HP-20済）';
-      showScreen('reward');
-    },
-  },
-  {
-    id:'gamble', icon:'🎲', name:'運命の賭け',
-    desc:'50%の確率でHPが全回復。残り50%でHP半減。',
-    canDecline:true,
-    onAccept(G) {
-      if (Math.random() < 0.5) {
-        G.player.hp = G.player.maxHp;
-      } else {
-        G.player.hp = Math.max(1, Math.floor(G.player.hp / 2));
-      }
-      showScreen('map');
-    },
-  },
-  {
-    id:'merchant', icon:'🧙', name:'旅の魔術師',
-    desc:'デッキからランダムなタイル1枚を、別の属性に変換します。',
-    canDecline:true,
-    onAccept(G) {
-      if (G.deck.length === 0) { showScreen('map'); return; }
-      const idx = Math.floor(Math.random() * G.deck.length);
-      const newType = TILE_DEFS[Math.floor(Math.random() * TILE_DEFS.length)];
-      G.deck[idx] = { ...newType };
-      showScreen('map');
-    },
-  },
-  {
-    id:'library', icon:'📚', name:'古代の書庫',
-    desc:'古い魔導書を読んだ。コンボ呪文を1つ選んで威力を永続強化します（ダメージ+3 / 回復+6）。',
-    canDecline:false,
-    onAccept(G) {
-      // コンボ呪文一覧を報酬選択UIで提示（タイル選択UIを流用）
-      const comboList = SPELL_COMBOS.filter(c => c.dmg > 0 || c.heal > 0);
-      const choices = shuffle([...comboList]).slice(0, 4);
-      const cont = document.getElementById('reward-tiles');
-      cont.innerHTML = '';
-      choices.forEach(spell => {
-        const bonus = G.spellComboBonus[spell.key] || 0;
-        const el = document.createElement('div');
-        el.className = 'reward-tile';
-        el.style.width = '80px';
-        el.innerHTML = `
-          <span class="tile-icon" style="font-size:18px;font-family:'Cinzel',serif;color:var(--accent2)">${spell.name}</span>
-          <span class="tile-name">${spell.dmg>0?'⚔️'+(spell.dmg+bonus):'💚'+(spell.heal+bonus)}</span>
-          <span class="tile-pow" style="color:var(--green)">→+${spell.dmg>0?3:6}</span>
-        `;
-        el.onclick = () => {
-          G.spellComboBonus[spell.key] = (G.spellComboBonus[spell.key] || 0) + (spell.dmg > 0 ? 3 : 6);
+// ── RF.Config: ゲーム設定・難易度・強化・イベント・定数 ──────────
+// 将来: data/game-config.js に分離
+RF.Config = (() => {
+  const DIFFICULTIES = {
+    easy:   { label:'EASY',   atkMult:0.7, hpMult:0.8, playerHp:100, handSize:6, deckLimit:999, goldMult:1.2, spellComboKey:'runefall_best_easy'   },
+    normal: { label:'NORMAL', atkMult:1.0, hpMult:1.0, playerHp:80,  handSize:6, deckLimit:999, goldMult:1.0, spellComboKey:'runefall_best_normal' },
+    hard:   { label:'HARD',   atkMult:1.0, hpMult:1.1, playerHp:80,  handSize:6, deckLimit:20,  goldMult:0.8, spellComboKey:'runefall_best_hard'   },
+  };
+  const UPGRADE_DEFS = [
+    { id:'hp_up',   name:'体力強化',   icon:'❤️', baseCost:20, maxLv:3, desc:lv=>`最大HP +${lv*20}`,    apply:(G,lv)=>{ G.player.maxHp=G.diffConf.playerHp+lv*20; G.player.hp=Math.min(G.player.hp,G.player.maxHp); } },
+    { id:'atk_up',  name:'攻撃強化',   icon:'⚔️', baseCost:25, maxLv:3, desc:lv=>`全ダメージ +${lv*2}`, apply:(G,lv)=>{ G.player.atkBonus=lv*2; } },
+    { id:'heal_up', name:'回復強化',   icon:'💚', baseCost:20, maxLv:2, desc:lv=>`回復量 +${lv*6}`,     apply:(G,lv)=>{ G.player.healBonus=lv*6; } },
+    { id:'gold_up', name:'財宝の加護', icon:'💰', baseCost:15, maxLv:2, desc:lv=>`Gold獲得 +${lv*30}%`, apply:(G,lv)=>{ G.player.goldRate=G.diffConf.goldMult+lv*0.3; } },
+    { id:'hand_up', name:'手札拡張',   icon:'🎴', baseCost:30, maxLv:2, desc:lv=>`手札 +${lv}枚`,       apply:(G,lv)=>{ G.player.handSize=G.diffConf.handSize+lv; } },
+  ];
+  const RANDOM_EVENTS = [
+    {
+      id:'blessing', icon:'🌟', name:'祝福の泉',
+      desc:'手持ちタイルを1枚選んでパワーを+1強化します。',
+      canDecline:true,
+      onAccept(G) {
+        const choices = [...new Map(G.deck.map(t=>[t.id,t])).values()];
+        buildRewardTiles('reward-tiles', choices.slice(0,4), tile => {
+          G.deck.forEach(t => { if(t.id===tile.id) t.power++; });
           showScreen('map');
-        };
-        cont.appendChild(el);
-      });
-      document.getElementById('reward-title').textContent = '📚 古代の書庫';
-      document.getElementById('reward-sub').textContent   = '強化するコンボ呪文を1つ選択';
-      showScreen('reward');
+        });
+        document.getElementById('reward-title').textContent = '🌟 祝福の泉';
+        document.getElementById('reward-sub').textContent   = '強化するタイルを1枚選択';
+        showScreen('reward');
+      },
     },
-  },
-];
+    {
+      id:'curse', icon:'💀', name:'呪いの祭壇',
+      desc:'HP-20と引き換えに、強力なタイルを1枚入手します。',
+      canDecline:true,
+      onAccept(G) {
+        G.player.hp = Math.max(1, G.player.hp - 20);
+        const pool = shuffle([...TILE_DEFS]).slice(0,3);
+        buildRewardTiles('reward-tiles', pool, tile => { G.deck.push({...tile}); showScreen('map'); });
+        document.getElementById('reward-title').textContent = '💀 呪いの代償';
+        document.getElementById('reward-sub').textContent   = 'タイルを1枚獲得（HP-20済）';
+        showScreen('reward');
+      },
+    },
+    {
+      id:'gamble', icon:'🎲', name:'運命の賭け',
+      desc:'50%の確率でHPが全回復。残り50%でHP半減。',
+      canDecline:true,
+      onAccept(G) {
+        G.player.hp = Math.random() < 0.5 ? G.player.maxHp : Math.max(1, Math.floor(G.player.hp/2));
+        showScreen('map');
+      },
+    },
+    {
+      id:'merchant', icon:'🧙', name:'旅の魔術師',
+      desc:'デッキからランダムなタイル1枚を、別の属性に変換します。',
+      canDecline:true,
+      onAccept(G) {
+        if (G.deck.length === 0) { showScreen('map'); return; }
+        G.deck[Math.floor(Math.random()*G.deck.length)] = { ...TILE_DEFS[Math.floor(Math.random()*TILE_DEFS.length)] };
+        showScreen('map');
+      },
+    },
+    {
+      id:'library', icon:'📚', name:'古代の書庫',
+      desc:'古い魔導書を読んだ。コンボ呪文を1つ選んで威力を永続強化します（ダメージ+3 / 回復+6）。',
+      canDecline:false,
+      onAccept(G) {
+        const comboList = SPELL_COMBOS.filter(c => c.dmg > 0 || c.heal > 0);
+        const choices = shuffle([...comboList]).slice(0, 4);
+        const cont = document.getElementById('reward-tiles');
+        cont.innerHTML = '';
+        choices.forEach(spell => {
+          const bonus = G.spellComboBonus[spell.key] || 0;
+          const el = document.createElement('div');
+          el.className = 'reward-tile';
+          el.style.width = '80px';
+          el.innerHTML = `
+            <span class="tile-icon" style="font-size:18px;font-family:'Cinzel',serif;color:var(--accent2)">${spell.name}</span>
+            <span class="tile-name">${spell.dmg>0?'⚔️'+(spell.dmg+bonus):'💚'+(spell.heal+bonus)}</span>
+            <span class="tile-pow" style="color:var(--green)">→+${spell.dmg>0?3:6}</span>
+          `;
+          el.onclick = () => {
+            G.spellComboBonus[spell.key] = (G.spellComboBonus[spell.key]||0) + (spell.dmg>0?3:6);
+            showScreen('map');
+          };
+          cont.appendChild(el);
+        });
+        document.getElementById('reward-title').textContent = '📚 古代の書庫';
+        document.getElementById('reward-sub').textContent   = '強化するコンボ呪文を1つ選択';
+        showScreen('reward');
+      },
+    },
+  ];
+  const TUTORIAL_STEPS = [
+    { icon:'👋', msg:'RUNEFALLへようこそ！\nまずはルーンタイルを選んでみましょう。', target:'tile-hand' },
+    { icon:'🎴', msg:'タイルは最大3枚まで選べます。\n同じ属性や相性のよい組み合わせを狙いましょう。', target:'tile-hand' },
+    { icon:'⚔️', msg:'タイルを選んだら「詠唱」で呪文を発動！\n組み合わせ次第で強力なコンボが炸裂します。', target:'btn-cast' },
+    { icon:'🗺️', msg:'敵を倒したらマップに戻ります。\n部屋の種類に注目：⚔️敵 🏪ショップ 🏕️休憩 💎宝箱', target:null },
+    { icon:'🎴', msg:'「デッキ確認」でコンボ到達状況を確認できます。\nタイルを集めてコンボを狙おう！', target:'btn-open-deck' },
+  ];
+  const ROOM_TYPES     = ['enemy','enemy','enemy','shop','treasure','rest','event'];
+  const DUNGEON_FLOORS = 8;
+  const SHOP_PRICE     = 15;
+  const MAX_SELECTED   = 3;
+  return { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS, ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED };
+})();
 
-const ROOM_TYPES = ['enemy','enemy','enemy','shop','treasure','rest','event'];
-const DUNGEON_FLOORS = 8;
-const SHOP_PRICE = 15;
-const MAX_SELECTED = 3;
+// ── RF.Effects: エフェクトシステム ───────────────────────────────
+// 将来: engine/effect.js に分離
+RF.Effects = (() => {
+  const SPELL_EFFECTS = {
+    burn:  { colors:['#ff4400','#ff8800','#ffcc00'], shape:'spark',  dir:'up',     count:40, speed:4.0, spread:1.2, decay:0.025 },
+    heal:  { colors:['#44ff88','#88ffaa','#ccffdd'], shape:'orb',    dir:'up',     count:35, speed:2.5, spread:0.6, decay:0.018 },
+    curse: { colors:['#9900cc','#cc44ff','#440066'], shape:'orb',    dir:'spiral', count:40, speed:3.0, spread:1.5, decay:0.020 },
+    stun:  { colors:['#ffee00','#ffff88','#ffffff'], shape:'spark',  dir:'burst',  count:45, speed:5.5, spread:2.0, decay:0.030 },
+    slow:  { colors:['#0088ff','#44ccff','#aaeeff'], shape:'wave',   dir:'out',    count:30, speed:2.0, spread:1.0, decay:0.015 },
+    blind: { colors:['#ffffff','#eeeeff','#ccccff'], shape:'flash',  dir:'out',    count:50, speed:6.0, spread:2.5, decay:0.040 },
+    pierce:{ colors:['#ffdd44','#ffffff','#ffaa00'], shape:'line',   dir:'right',  count:20, speed:8.0, spread:0.3, decay:0.025 },
+    wet:   { colors:['#0044ff','#44aaff','#aaddff'], shape:'drop',   dir:'down',   count:35, speed:3.0, spread:1.0, decay:0.022 },
+    sweep: { colors:['#66ff88','#aaffcc','#ffffff'], shape:'line',   dir:'right',  count:25, speed:7.0, spread:0.5, decay:0.028 },
+  };
+  return { SPELL_EFFECTS };
+})();
+
+// ══ デストラクチャリング展開 ══════════════════════════════════════
+// 参照元コード（54箇所）を変更せずに使えるようにする。
+// 将来のファイル分離時はこの行を import 文に1行置換するだけで済む。
+// 例: import { TILE_DEFS, PARTICLE_COLORS } from './data/tiles.js';
+const { TILE_DEFS, PARTICLE_COLORS }                                              = RF.Tiles;
+const { SPELL_COMBOS, COMBO_HINTS }                                               = RF.Spells;
+const { ENEMIES, BOSS_DEF, getBossAction }                                        = RF.Enemies;
+const { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS,
+        ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED }                    = RF.Config;
+const { SPELL_EFFECTS }                                                           = RF.Effects;
 
 let G = {};
 let currentDifficulty = 'normal';
@@ -1141,32 +1216,6 @@ function rRect(ctx,x,y,w,h,r){
 // 各エフェクトは独立した設定オブジェクトとして定義する
 // → 将来: effects.js として分離・外部化が可能
 
-// 属性カラー（基本攻撃・フォールバック用）
-const PARTICLE_COLORS = {
-  fire:  ['#ff6633','#ffaa44','#ff3300'],
-  water: ['#3399ff','#aaddff','#0066cc'],
-  wind:  ['#66dd88','#ccffcc','#33bb55'],
-  earth: ['#cc9944','#ffcc66','#aa7722'],
-  light: ['#ffdd44','#ffffff','#ffee88'],
-  dark:  ['#9944cc','#cc88ff','#6600aa'],
-};
-
-// コンボエフェクト設定（effectキー → 設定オブジェクト）
-// shape: 'spark'=通常粒子 / 'orb'=大きい球体 / 'wave'=横広がり
-//        'line'=直線 / 'flash'=瞬間拡散 / 'drop'=落下
-// dir:   'up'=上昇 / 'burst'=全方向 / 'out'=外向き
-//        'spiral'=螺旋 / 'right'=右方向 / 'down'=落下
-const SPELL_EFFECTS = {
-  burn:  { colors:['#ff4400','#ff8800','#ffcc00'], shape:'spark',  dir:'up',     count:40, speed:4.0, spread:1.2, decay:0.025 },
-  heal:  { colors:['#44ff88','#88ffaa','#ccffdd'], shape:'orb',    dir:'up',     count:35, speed:2.5, spread:0.6, decay:0.018 },
-  curse: { colors:['#9900cc','#cc44ff','#440066'], shape:'orb',    dir:'spiral', count:40, speed:3.0, spread:1.5, decay:0.020 },
-  stun:  { colors:['#ffee00','#ffff88','#ffffff'], shape:'spark',  dir:'burst',  count:45, speed:5.5, spread:2.0, decay:0.030 },
-  slow:  { colors:['#0088ff','#44ccff','#aaeeff'], shape:'wave',   dir:'out',    count:30, speed:2.0, spread:1.0, decay:0.015 },
-  blind: { colors:['#ffffff','#eeeeff','#ccccff'], shape:'flash',  dir:'out',    count:50, speed:6.0, spread:2.5, decay:0.040 },
-  pierce:{ colors:['#ffdd44','#ffffff','#ffaa00'], shape:'line',   dir:'right',  count:20, speed:8.0, spread:0.3, decay:0.025 },
-  wet:   { colors:['#0044ff','#44aaff','#aaddff'], shape:'drop',   dir:'down',   count:35, speed:3.0, spread:1.0, decay:0.022 },
-  sweep: { colors:['#66ff88','#aaffcc','#ffffff'], shape:'line',   dir:'right',  count:25, speed:7.0, spread:0.5, decay:0.028 },
-};
 
 /**
  * エフェクトパーティクルを生成する統一関数
@@ -1763,41 +1812,7 @@ function playSE(type) {
 
 // ══ ボス特殊行動 ════════════════════════════════
 // ボスのHP・行動ターン数を強化
-const BOSS_DEF = {
-  name:'魔竜', icon:'🐉', maxHp:110, atk:11, gold:60,
-  // ターン3の倍数で炎の息吹、HP40%以下で激怒
-};
-
-function getBossAction() {
-  const hp = G.enemy.hp / G.enemy.maxHp;
-  const t  = G.enemy.turn || 0;
-
-  // 激怒状態（HP40%以下）
-  if (hp <= 0.4 && !G.enemy.enraged) {
-    G.enemy.enraged = true;
-    G.enemy.atk = Math.floor(G.enemy.atk * 1.8); // 難易度倍率適用済みのATKを基準に計算
-    return { type:'enrage', name:'【激怒】', msg:'魔竜が激怒した！攻撃力が跳ね上がる！', seType:'special' };
-  }
-  // 3ターンごとに炎の息吹
-  if (t > 0 && t % 3 === 0) {
-    return { type:'breath', name:'炎の息吹', msg:'魔竜が炎を吐いた！', dmgMult:1.6, seType:'boss', effect:'burn' };
-  }
-  // 5ターンごとに手牌破壊
-  if (t > 0 && t % 5 === 0) {
-    return { type:'roar', name:'竜の咆哮', msg:'咆哮でルーンが乱れた！手牌がシャッフルされる', seType:'special' };
-  }
-  return { type:'normal', seType:'hit' };
-}
-
 // ══ チュートリアル ══════════════════════════════
-const TUTORIAL_STEPS = [
-  { icon:'👋', msg:'RUNEFALLへようこそ！\nまずはルーンタイルを選んでみましょう。', target:'tile-hand' },
-  { icon:'🎴', msg:'タイルは最大3枚まで選べます。\n同じ属性や相性のよい組み合わせを狙いましょう。', target:'tile-hand' },
-  { icon:'⚔️', msg:'タイルを選んだら「詠唱」で呪文を発動！\n組み合わせ次第で強力なコンボが炸裂します。', target:'btn-cast' },
-  { icon:'🗺️', msg:'敵を倒したらマップに戻ります。\n部屋の種類に注目：⚔️敵 🏪ショップ 🏕️休憩 💎宝箱', target:null },
-  { icon:'🎴', msg:'「デッキ確認」でコンボ到達状況を確認できます。\nタイルを集めてコンボを狙おう！', target:'btn-open-deck' },
-];
-
 let tutorialActive = false;
 let tutorialStep = 0;
 let tutorialHighlightEl = null;
