@@ -704,7 +704,7 @@ RF.Enemies = (() => {
     { name:'魔竜',       icon:'🐉', maxHp:90,  atk:14, gold:60 },
   ];
   const BOSS_DEF = {
-    name:'魔竜', icon:'🐉', maxHp:110, atk:11, gold:60,
+    name:'魔竜', icon:'🐉', maxHp:90, atk:10, gold:60,
   };
   function getBossAction() {
     const hp = G.enemy.hp / G.enemy.maxHp;
@@ -1157,6 +1157,8 @@ function enterBattle() {
       maxHp: Math.floor(BOSS_DEF.maxHp * d.hpMult),
       atk:   Math.floor(BOSS_DEF.atk   * d.atkMult),
     };
+    // ボス戦前：回復の泉（HP+50）
+    G.player.hp = Math.min(G.player.maxHp, G.player.hp + 50);
   } else {
     const f=G.floor;
     const w=[Math.max(0,8-f),Math.max(0,10-f),Math.min(f+1,8),Math.max(0,f-2)];
@@ -1701,12 +1703,9 @@ function openDeck(){
   const total=G.deck.length;
   document.getElementById('deck-total').textContent=`計${total}枚`;
 
-  // ショップへボタン: 現在フロアがショップ部屋（未クリア）なら有効
+  // ショップへボタン: 現在いる部屋がショップの場合のみ表示
   const shopBtn = document.getElementById('btn-deck-to-shop');
-  const isShopFloor = G.dungeon[G.mapCurrentIdx]?.choices?.some(
-    c => c.type === 'shop' && !c.cleared
-  );
-  shopBtn.style.display = isShopFloor ? '' : 'none';
+  shopBtn.style.display = (G.currentRoom?.type === 'shop') ? '' : 'none';
   const gc=document.getElementById('deck-groups'); gc.innerHTML='';
   for(const def of TILE_DEFS){
     const cnt=counts[def.id]||0; if(!cnt) continue;
