@@ -827,15 +827,17 @@ function generateDungeon() {
       // F8: boss固定・1択
       floors.push({ choices:[{ type:'boss', cleared:false }] });
     } else {
-      // F2〜F7: 2択（同タイプ禁止）
-      let a, b;
+      // F2〜F7: 3択（すべて異なるタイプ）
+      let a, b, c;
       do {
         a = ROOM_TYPES[Math.floor(Math.random()*ROOM_TYPES.length)];
         b = ROOM_TYPES[Math.floor(Math.random()*ROOM_TYPES.length)];
-      } while (a === b);
+        c = ROOM_TYPES[Math.floor(Math.random()*ROOM_TYPES.length)];
+      } while (a===b || b===c || a===c);
       floors.push({ choices:[
         { type:a, cleared:false },
         { type:b, cleared:false },
+        { type:c, cleared:false },
       ]});
     }
   }
@@ -949,7 +951,10 @@ function renderMap() {
     const y = fi * rowH + rowH / 2;
     const n = floor.choices.length;
     floor.choices.forEach((choice, ci) => {
-      const x = n === 1 ? W/2 : (ci === 0 ? W*0.28 : W*0.72);
+      // 1択:中央 / 2択:左右 / 3択:均等3分割
+      const x = n === 1 ? W/2
+              : n === 2 ? (ci===0 ? W*0.28 : W*0.72)
+              : W*(ci+1)/4; // 25%・50%・75%
       G.mapRooms.push({ ...choice, floorIdx:fi, choiceIdx:ci, x, y });
     });
   });
