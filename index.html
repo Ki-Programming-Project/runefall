@@ -3,6 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script>
+// キャッシュ対策: バージョン番号が一致しない場合は強制リロード
+// 更新時はAPP_VERSIONの値を変更するだけでスマホ含む全端末に新版が配信される
+(function() {
+  var APP_VERSION = '1.6.0';
+  var key = 'runefall_version';
+  var stored = localStorage.getItem(key);
+  if (stored !== APP_VERSION) {
+    localStorage.setItem(key, APP_VERSION);
+    // キャッシュを無視して強制リロード
+    if (stored !== null) {
+      window.location.reload(true);
+    }
+  }
+})();
+</script>
 <title>RUNEFALL</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
