@@ -362,6 +362,27 @@ html, body {
 .deck-card-tiles { font-size:12px; color:var(--text); letter-spacing:0.05em; }
 .deck-card-combo { font-size:11px; color:var(--green); text-align:center; line-height:1.5; }
 
+.deck-card.locked { opacity:0.5; cursor:default; }
+.deck-card.locked .deck-card-name { color:var(--text2); }
+
+/* ── 実績画面 ── */
+#screen-achievements { background:#0a0812; }
+.achievements-list { display:flex; flex-direction:column; gap:10px; padding:0 4px; }
+.achievement-item {
+  background:var(--panel); border:1.5px solid var(--border);
+  border-radius:10px; padding:12px 16px;
+  display:flex; align-items:center; gap:12px;
+}
+.achievement-item.unlocked { border-color:var(--accent); }
+.achievement-icon  { font-size:24px; flex-shrink:0; }
+.achievement-info  { flex:1; }
+.achievement-name  { font-family:'Cinzel',serif; font-size:13px; color:var(--accent2); }
+.achievement-desc  { font-size:11px; color:var(--text2); margin-top:2px; }
+.achievement-xp    { font-size:11px; color:var(--text2); text-align:right; flex-shrink:0; }
+.achievement-item.locked .achievement-icon { filter:grayscale(1); opacity:0.4; }
+.meta-xp-bar-wrap  { background:var(--panel2); border-radius:4px; height:8px; width:100%; margin-top:4px; }
+.meta-xp-bar       { background:var(--accent); height:8px; border-radius:4px; transition:width 0.4s; }
+
 /* ── ゲームオーバー・クリア ── */
 #screen-gameover, #screen-clear { position:relative; justify-content:center; align-items:center; }
 #gameover-canvas, #clear-canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
@@ -394,7 +415,31 @@ html, body {
       <button id="btn-hard"   class="btn-diff hard">  <span class="diff-label">HARD</span>  <span class="diff-hint">敵HP増・デッキ上限20枚</span></button>
     </div>
     <div class="best-score-row" id="title-best-scores"></div>
-    <button id="btn-howto" class="btn-secondary">遊び方</button>
+    <div style="display:flex;gap:8px;width:100%;max-width:280px">
+      <button id="btn-howto" class="btn-secondary" style="flex:1">遊び方</button>
+      <button id="btn-achievements" class="btn-secondary" style="flex:1">✨ 実績</button>
+    </div>
+  </div>
+</div>
+
+<!-- 実績画面 -->
+<div id="screen-achievements" class="screen">
+  <div class="page-header">
+    <h2 class="page-title">✨ 実績・解放</h2>
+  </div>
+  <div class="page-scroll">
+    <div class="page-body">
+      <div id="achievements-xp-area" style="margin-bottom:16px;text-align:center">
+        <div style="font-size:13px;color:var(--text2)">累計メタXP</div>
+        <div id="achievements-xp-val" style="font-family:'Cinzel',serif;font-size:28px;color:var(--accent2)">0</div>
+        <div class="meta-xp-bar-wrap"><div id="achievements-xp-bar" class="meta-xp-bar" style="width:0%"></div></div>
+        <div id="achievements-xp-next" style="font-size:11px;color:var(--text2);margin-top:4px"></div>
+      </div>
+      <div class="achievements-list" id="achievements-list"></div>
+    </div>
+  </div>
+  <div class="page-footer">
+    <button id="btn-achievements-back" class="btn-secondary">戻る</button>
   </div>
 </div>
 
@@ -860,6 +905,18 @@ RF.Config = (() => {
     { icon:'🗺️', msg:'敵を倒したらマップに戻ります。\n部屋の種類に注目：⚔️敵 🏪ショップ 🏕️休憩 💎宝箱', target:null },
     { icon:'🎴', msg:'「デッキ確認」でコンボ到達状況を確認できます。\nタイルを集めてコンボを狙おう！', target:'btn-open-deck' },
   ];
+  // ── メタ進行：解放コンテンツ定義 ──
+  const META_UNLOCKS = [
+    { xp:  50, id:'speed_start',   type:'passive',  name:'迅速の加護',    icon:'💰', desc:'ゲーム開始時にGold+10' },
+    { xp: 120, id:'deck_chaos',    type:'deck',     name:'混沌のデッキ',  icon:'🎲', desc:'ランダム12枚の5枚目デッキを解放' },
+    { xp: 200, id:'rest_heal',     type:'passive',  name:'旅人の回復力',  icon:'🏕️', desc:'休憩の回復量+10（30→40）' },
+    { xp: 300, id:'shop_discount', type:'passive',  name:'交渉術',        icon:'🏪', desc:'タイル購入価格-3G（15→12）' },
+    { xp: 450, id:'event_cross',   type:'event',    name:'運命の導き',    icon:'✨', desc:'新イベント「運命の交差点」を追加' },
+    { xp: 600, id:'boss_preview',  type:'info',     name:'竜の知識',      icon:'🐉', desc:'ボス戦前に次の特殊行動を予告' },
+    { xp: 800, id:'deck_ancient',  type:'deck',     name:'古の術式',      icon:'📜', desc:'高パワータイル中心の「古代」デッキを解放' },
+    { xp:1000, id:'diff_void',     type:'difficulty',name:'深淵への挑戦', icon:'🌑', desc:'VOID難易度を解放（敵HP×1.3・スコア×2.0）' },
+  ];
+
   const ROOM_TYPES     = ['enemy','enemy','enemy','shop','treasure','rest','event'];
   const DUNGEON_FLOORS = 8;
   const SHOP_PRICE     = 15;
@@ -872,29 +929,48 @@ RF.Config = (() => {
       desc:'全属性2枚。どんなコンボも狙える汎用構成。',
       tiles:{ fire:2, water:2, wind:2, earth:2, light:2, dark:2 },
       combo:'Holy Light / Flood / Boulder',
+      unlock: null,
     },
     {
       id:'aggro', icon:'🔥', name:'攻撃特化',
       desc:'炎・闇を厚くした高火力構成。序盤から強力なコンボを狙う。',
       tiles:{ fire:4, dark:3, earth:2, water:1, wind:1, light:1 },
       combo:'Inferno / Hellfire / Boulder',
+      unlock: null,
     },
     {
       id:'sustain', icon:'💚', name:'回復特化',
       desc:'光・水を厚くした持久型構成。長期戦に強く初心者にも向く。',
       tiles:{ light:4, water:3, earth:2, fire:1, wind:1, dark:1 },
       combo:'Holy Light / Flood / Cleanse',
+      unlock: null,
     },
     {
       id:'control', icon:'🌀', name:'妨害特化',
       desc:'土・風を厚くした妨害構成。stun/slowで敵の攻撃を封じる。',
       tiles:{ earth:4, wind:3, water:2, dark:1, fire:1, light:1 },
       combo:'Boulder / Mud Trap / Gust',
+      unlock: null,
+    },
+    {
+      id:'chaos', icon:'🎲', name:'混沌',
+      desc:'ランダムな12枚で挑む。何が起こるかわからない。',
+      tiles:null, // ランダム生成
+      combo:'運次第…',
+      unlock:'deck_chaos',
+    },
+    {
+      id:'ancient', icon:'📜', name:'古代',
+      desc:'高パワータイル中心の上級構成。火力は高いが安定しない。',
+      tiles:{ earth:4, fire:3, dark:3, water:1, wind:1, light:0 },
+      combo:'Earthquake / Abyss / Magma',
+      unlock:'deck_ancient',
     },
   ];
 
   return { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS,
-           ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED, DECK_PRESETS };
+           ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED,
+           DECK_PRESETS, META_UNLOCKS };
 })();
 
 // ── RF.Effects: エフェクトシステム ───────────────────────────────
@@ -922,35 +998,72 @@ const { TILE_DEFS, PARTICLE_COLORS }                                            
 const { SPELL_COMBOS, COMBO_HINTS }                                               = RF.Spells;
 const { ENEMIES, BOSS_DEF, getBossAction }                                        = RF.Enemies;
 const { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS,
-        ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED, DECK_PRESETS }      = RF.Config;
+        ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED,
+        DECK_PRESETS, META_UNLOCKS }                                               = RF.Config;
 const { SPELL_EFFECTS }                                                           = RF.Effects;
 
 let G = {};
 let currentDifficulty = 'normal';
 let currentDeckPreset = localStorage.getItem('runefall_last_deck') || 'balanced';
 
-// ── デッキ選択画面 ──
+// ── 実績画面描画 ──
+function renderAchievements() {
+  const totalXp = parseInt(localStorage.getItem('runefall_meta_xp') || '0');
+  const unlocked = getUnlocked();
+
+  // XPバー
+  document.getElementById('achievements-xp-val').textContent = totalXp;
+  const next = META_UNLOCKS.find(u => u.xp > totalXp);
+  const prev = [...META_UNLOCKS].reverse().find(u => u.xp <= totalXp);
+  const barPct = next
+    ? Math.floor(((totalXp - (prev?.xp||0)) / (next.xp - (prev?.xp||0))) * 100)
+    : 100;
+  document.getElementById('achievements-xp-bar').style.width = barPct + '%';
+  document.getElementById('achievements-xp-next').textContent = next
+    ? `次の解放まで ${next.xp - totalXp}XP（${next.icon} ${next.name}）`
+    : '全コンテンツ解放済み！';
+
+  // 一覧
+  const list = document.getElementById('achievements-list');
+  list.innerHTML = '';
+  META_UNLOCKS.forEach(u => {
+    const isUnlocked = unlocked.includes(u.id);
+    const el = document.createElement('div');
+    el.className = 'achievement-item ' + (isUnlocked ? 'unlocked' : 'locked');
+    el.innerHTML = `
+      <span class="achievement-icon">${u.icon}</span>
+      <div class="achievement-info">
+        <div class="achievement-name">${u.name}</div>
+        <div class="achievement-desc">${u.desc}</div>
+      </div>
+      <span class="achievement-xp">${isUnlocked ? '✅' : u.xp+'XP'}</span>
+    `;
+    list.appendChild(el);
+  });
+}
 function openDeckSelect(diffKey) {
   currentDifficulty = diffKey;
-  // カードを描画
+  const unlocked = getUnlocked();
   const cont = document.getElementById('deck-cards');
   cont.innerHTML = '';
   DECK_PRESETS.forEach(p => {
+    const isLocked = p.unlock && !unlocked.includes(p.unlock);
     const card = document.createElement('div');
-    card.className = 'deck-card' + (p.id === currentDeckPreset ? ' selected' : '');
+    card.className = 'deck-card' + (p.id === currentDeckPreset ? ' selected' : '') + (isLocked ? ' locked' : '');
     card.innerHTML = `
-      <span class="deck-card-icon">${p.icon}</span>
+      <span class="deck-card-icon">${isLocked ? '🔒' : p.icon}</span>
       <span class="deck-card-name">${p.name}</span>
-      <span class="deck-card-desc">${p.desc}</span>
-      <span class="deck-card-tiles">${Object.entries(p.tiles).map(([id,n])=>
-        TILE_DEFS.find(t=>t.id===id)?.icon.repeat(n)).join('')}</span>
-      <span class="deck-card-combo">▶ ${p.combo}</span>
+      <span class="deck-card-desc">${isLocked ? META_UNLOCKS.find(u=>u.id===p.unlock)?.desc ?? '?' : p.desc}</span>
+      <span class="deck-card-tiles">${isLocked ? '？？？？？？' : Object.entries(p.tiles||{}).map(([id,n])=>TILE_DEFS.find(t=>t.id===id)?.icon.repeat(n)).join('')}</span>
+      <span class="deck-card-combo">${isLocked ? '解放で使用可能' : '▶ '+p.combo}</span>
     `;
-    card.onclick = () => {
-      currentDeckPreset = p.id;
-      cont.querySelectorAll('.deck-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-    };
+    if (!isLocked) {
+      card.onclick = () => {
+        currentDeckPreset = p.id;
+        cont.querySelectorAll('.deck-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      };
+    }
     cont.appendChild(card);
   });
   showScreen('deck-select');
@@ -961,6 +1074,7 @@ function initGame(diffKey = currentDifficulty, deckPresetId = currentDeckPreset)
   currentDeckPreset  = deckPresetId;
   localStorage.setItem('runefall_last_deck', deckPresetId);
   const d = DIFFICULTIES[diffKey] || DIFFICULTIES.normal;
+  const unlocked = getUnlocked();
   G = {
     screen:'title',
     floor:1,
@@ -977,11 +1091,23 @@ function initGame(diffKey = currentDifficulty, deckPresetId = currentDeckPreset)
     totalTurns:0,
     spellComboBonus:{},
     totalDmg:0, totalHealed:0, comboCount:{},
+    // メタ永続強化フラグ
+    metaRestBonus:     unlocked.includes('rest_heal')     ? 10 : 0,
+    metaShopDiscount:  unlocked.includes('shop_discount') ? 3  : 0,
+    metaBossPreview:   unlocked.includes('boss_preview'),
   };
+  // 迅速の加護: 開始時Gold+10
+  if (unlocked.includes('speed_start')) G.player.gold += 10;
 }
 
 function buildStartDeck(presetId = 'balanced') {
   const preset = DECK_PRESETS.find(p => p.id === presetId) || DECK_PRESETS[0];
+  // 混沌デッキ: 完全ランダム12枚
+  if (!preset.tiles) {
+    const deck = [];
+    for (let i = 0; i < 12; i++) deck.push({...TILE_DEFS[Math.floor(Math.random()*TILE_DEFS.length)]});
+    return shuffle(deck);
+  }
   const deck = [];
   for (const [tileId, count] of Object.entries(preset.tiles)) {
     const tileDef = TILE_DEFS.find(t => t.id === tileId);
@@ -1041,12 +1167,13 @@ RF.Screen = (() => {
     onScreenEnter(id);
   }
   function onScreenEnter(id) {
-    if (id==='title')       { initTitleCanvas(); updateTitleBestScores(); }
-    if (id==='deck-select') { /* openDeckSelectで描画済み */ }
-    if (id==='map')         renderMap();
-    if (id==='battle')      enterBattle();
-    if (id==='gameover')    initGameoverCanvas();
-    if (id==='clear')       initClearCanvas();
+    if (id==='title')        { initTitleCanvas(); updateTitleBestScores(); }
+    if (id==='deck-select')  { /* openDeckSelectで描画済み */ }
+    if (id==='achievements') renderAchievements();
+    if (id==='map')          renderMap();
+    if (id==='battle')       enterBattle();
+    if (id==='gameover')     initGameoverCanvas();
+    if (id==='clear')        initClearCanvas();
   }
   function initTitleCanvas() {
     if (titleRaf) { cancelAnimationFrame(titleRaf); titleRaf=null; }
@@ -1258,6 +1385,13 @@ function enterBattle() {
     };
     // ボス戦前：回復の泉（HP+50）
     G.player.hp = Math.min(G.player.maxHp, G.player.hp + 50);
+    // 竜の知識: 最初の特殊行動を予告
+    if (G.metaBossPreview) {
+      const preview = G.enemy?.turn === 0
+        ? 'ボス最初の行動: 3T目に炎の息吹、HP40%以下で激怒'
+        : null;
+      if (preview) setTimeout(() => showToast(`🐉 ${preview}`, 4000), 600);
+    }
   } else {
     const f=G.floor;
     const w=[Math.max(0,8-f),Math.max(0,10-f),Math.min(f+1,8),Math.max(0,f-2)];
@@ -1681,7 +1815,47 @@ function saveScore(cleared) {
   if (score > prev) localStorage.setItem(key, String(score));
   const runs = parseInt(localStorage.getItem('runefall_total_runs') || '0');
   localStorage.setItem('runefall_total_runs', String(runs + 1));
+
+  // メタXP計算・保存・解放チェック
+  const xp = calcMetaXP(cleared);
+  const prevXp  = parseInt(localStorage.getItem('runefall_meta_xp') || '0');
+  const totalXp = prevXp + xp;
+  localStorage.setItem('runefall_meta_xp', String(totalXp));
+  checkUnlocks(prevXp, totalXp);
+
   return { score, prev, isNew: score > prev };
+}
+
+function calcMetaXP(cleared) {
+  let xp = 10;
+  if (G.floor >= 4) xp += 20;
+  if (G.floor >= 7) xp += 40;
+  if (cleared)      xp += 80;
+  const comboTypes = Object.keys(G.comboCount || {}).length;
+  if (comboTypes >= 5) xp += 15;
+  if ((G.comboCount || {})['Abyss']) xp += 20;
+  if (cleared && G.difficulty === 'normal') xp += 30;
+  if (cleared && G.difficulty === 'hard')   xp += 70;
+  return xp;
+}
+
+function checkUnlocks(prevXp, totalXp) {
+  const unlocked = JSON.parse(localStorage.getItem('runefall_unlocks') || '[]');
+  let newUnlock = null;
+  for (const u of META_UNLOCKS) {
+    if (u.xp > prevXp && u.xp <= totalXp && !unlocked.includes(u.id)) {
+      unlocked.push(u.id);
+      newUnlock = u;
+    }
+  }
+  if (unlocked.length > 0) localStorage.setItem('runefall_unlocks', JSON.stringify(unlocked));
+  if (newUnlock) {
+    setTimeout(() => showToast(`${newUnlock.icon} 解放！「${newUnlock.name}」`, 3500), 800);
+  }
+}
+
+function getUnlocked() {
+  return JSON.parse(localStorage.getItem('runefall_unlocks') || '[]');
 }
 
 function renderScoreBoard(containerId, cleared) {
@@ -1753,16 +1927,17 @@ function buildRewardTiles(id,tiles,onPick){
 RF.Shop = (() => {
   function openShop(){
     advanceFloor();
+    const price = SHOP_PRICE - (G.metaShopDiscount||0);
     document.getElementById('shop-gold').textContent=G.player.gold;
     const choices=shuffle([...TILE_DEFS]).slice(0,4);
     const cont=document.getElementById('shop-tiles'); cont.innerHTML='';
     for(const t of choices){
       const el=document.createElement('div'); el.className='reward-tile';
-      el.innerHTML=`<span class="tile-icon">${t.icon}</span><span class="tile-name">${t.name}</span><span class="tile-pow">${SHOP_PRICE}G</span>`;
+      el.innerHTML=`<span class="tile-icon">${t.icon}</span><span class="tile-name">${t.name}</span><span class="tile-pow">${price}G</span>`;
       el.onclick=()=>{
-        if(G.player.gold<SHOP_PRICE) return;
+        if(G.player.gold<price) return;
         if(G.deck.length>=G.diffConf.deckLimit){ showToast(`⚠️ デッキ上限（${G.diffConf.deckLimit}枚）に達しています`); return; }
-        G.player.gold-=SHOP_PRICE; G.deck.push({...t});
+        G.player.gold-=price; G.deck.push({...t});
         document.getElementById('shop-gold').textContent=G.player.gold;
         el.style.opacity='0.3'; el.style.pointerEvents='none';
         renderUpgradeList();
@@ -1828,7 +2003,7 @@ function openDeck(){
 
 function openRest(){
   advanceFloor();
-  G.player.hp=Math.min(G.player.maxHp,G.player.hp+30);
+  G.player.hp=Math.min(G.player.maxHp, G.player.hp + 30 + (G.metaRestBonus||0));
   showScreen('rest');
 }
 
@@ -2003,6 +2178,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-howto').onclick      = () => showScreen('howto');
   document.getElementById('btn-howto-back').onclick = () => showScreen('title');
+  document.getElementById('btn-achievements').onclick      = () => showScreen('achievements');
+  document.getElementById('btn-achievements-back').onclick = () => showScreen('title');
   document.getElementById('btn-cast').onclick       = castSpell;
   document.getElementById('btn-skip').onclick       = skipTurn;
   document.getElementById('btn-reward-skip').onclick= () => showScreen('map');
