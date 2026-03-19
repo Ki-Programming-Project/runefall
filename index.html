@@ -1136,7 +1136,12 @@ function rRect(ctx,x,y,w,h,r){
   ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
 }
 
-// 属性別パーティクルカラー定義
+// ══ エフェクトシステム ══════════════════════════════
+// 将来のモジュール化を見据えたデータ駆動設計
+// 各エフェクトは独立した設定オブジェクトとして定義する
+// → 将来: effects.js として分離・外部化が可能
+
+// 属性カラー（基本攻撃・フォールバック用）
 const PARTICLE_COLORS = {
   fire:  ['#ff6633','#ffaa44','#ff3300'],
   water: ['#3399ff','#aaddff','#0066cc'],
@@ -1146,22 +1151,129 @@ const PARTICLE_COLORS = {
   dark:  ['#9944cc','#cc88ff','#6600aa'],
 };
 
-function spawnParticles(x, y, tileId, count=20) {
-  const colors = PARTICLE_COLORS[tileId] || ['#ffffff','#cccccc'];
+// コンボエフェクト設定（effectキー → 設定オブジェクト）
+// shape: 'spark'=通常粒子 / 'orb'=大きい球体 / 'wave'=横広がり
+//        'line'=直線 / 'flash'=瞬間拡散 / 'drop'=落下
+// dir:   'up'=上昇 / 'burst'=全方向 / 'out'=外向き
+//        'spiral'=螺旋 / 'right'=右方向 / 'down'=落下
+const SPELL_EFFECTS = {
+  burn:  { colors:['#ff4400','#ff8800','#ffcc00'], shape:'spark',  dir:'up',     count:40, speed:4.0, spread:1.2, decay:0.025 },
+  heal:  { colors:['#44ff88','#88ffaa','#ccffdd'], shape:'orb',    dir:'up',     count:35, speed:2.5, spread:0.6, decay:0.018 },
+  curse: { colors:['#9900cc','#cc44ff','#440066'], shape:'orb',    dir:'spiral', count:40, speed:3.0, spread:1.5, decay:0.020 },
+  stun:  { colors:['#ffee00','#ffff88','#ffffff'], shape:'spark',  dir:'burst',  count:45, speed:5.5, spread:2.0, decay:0.030 },
+  slow:  { colors:['#0088ff','#44ccff','#aaeeff'], shape:'wave',   dir:'out',    count:30, speed:2.0, spread:1.0, decay:0.015 },
+  blind: { colors:['#ffffff','#eeeeff','#ccccff'], shape:'flash',  dir:'out',    count:50, speed:6.0, spread:2.5, decay:0.040 },
+  pierce:{ colors:['#ffdd44','#ffffff','#ffaa00'], shape:'line',   dir:'right',  count:20, speed:8.0, spread:0.3, decay:0.025 },
+  wet:   { colors:['#0044ff','#44aaff','#aaddff'], shape:'drop',   dir:'down',   count:35, speed:3.0, spread:1.0, decay:0.022 },
+  sweep: { colors:['#66ff88','#aaffcc','#ffffff'], shape:'line',   dir:'right',  count:25, speed:7.0, spread:0.5, decay:0.028 },
+};
+
+/**
+ * エフェクトパーティクルを生成する統一関数
+ * @param {number} x - Canvas上のX座標
+ * @param {number} y - Canvas上のY座標
+ * @param {string} effectKey - SPELL_EFFECTSのキー（またはtileId）
+ * @param {boolean} isCombo - コンボ呪文かどうか（粒子数に影響）
+ */
+function spawnEffectParticles(x, y, effectKey, isCombo=true) {
+  const ef = SPELL_EFFECTS[effectKey];
+
+  // エフェクト定義がある場合: shape別の生成ロジック
+  if (ef) {
+    const count = isCombo ? ef.count : Math.floor(ef.count * 0.5);
+    for (let i = 0; i < count; i++) {
+      const color = ef.colors[Math.floor(Math.random()*ef.colors.length)];
+      let vx, vy, r, decay;
+
+      switch(ef.dir) {
+        case 'up': {
+          const a = (Math.random()-0.5)*Math.PI*ef.spread;
+          const sp = Math.random()*ef.speed+1;
+          vx = Math.sin(a)*sp; vy = -Math.cos(a)*sp - 1;
+          break;
+        }
+        case 'burst': {
+          const a = Math.random()*Math.PI*2;
+          const sp = Math.random()*ef.speed+1;
+          vx = Math.cos(a)*sp; vy = Math.sin(a)*sp;
+          break;
+        }
+        case 'out': {
+          const a = Math.random()*Math.PI*2;
+          const sp = (Math.random()*0.5+0.5)*ef.speed;
+          vx = Math.cos(a)*sp; vy = Math.sin(a)*sp;
+          break;
+        }
+        case 'spiral': {
+          const a = Math.random()*Math.PI*2;
+          const sp = Math.random()*ef.speed*0.7+0.5;
+          vx = Math.cos(a)*sp - Math.sin(a)*ef.spread;
+          vy = Math.sin(a)*sp + Math.cos(a)*ef.spread - 1;
+          break;
+        }
+        case 'right': {
+          vx = (Math.random()*0.5+0.5)*ef.speed;
+          vy = (Math.random()-0.5)*ef.spread*2;
+          break;
+        }
+        case 'down': {
+          vx = (Math.random()-0.5)*ef.speed*ef.spread;
+          vy = Math.random()*ef.speed*0.5+1;
+          break;
+        }
+        default: {
+          const a = Math.random()*Math.PI*2;
+          const sp = Math.random()*ef.speed+1;
+          vx = Math.cos(a)*sp; vy = Math.sin(a)*sp - 2;
+        }
+      }
+
+      switch(ef.shape) {
+        case 'orb':   r = Math.random()*8+4; break;
+        case 'flash': r = Math.random()*10+3; break;
+        case 'line':  r = Math.random()*3+1; break;
+        case 'drop':  r = Math.random()*5+2; break;
+        default:      r = Math.random()*5+2;
+      }
+      decay = ef.decay*(Math.random()*0.5+0.75);
+      G.particles.push({x, y, vx, vy, life:1, decay, r, color, shape:ef.shape});
+    }
+    return;
+  }
+
+  // エフェクト定義がない場合: 属性カラーパーティクル（フォールバック）
+  const colors = PARTICLE_COLORS[effectKey] || ['#ffffff','#cccccc'];
+  const count = isCombo ? 50 : 20;
   for(let i=0;i<count;i++){
     const a=Math.random()*Math.PI*2, sp=Math.random()*5+1;
-    const color = colors[Math.floor(Math.random()*colors.length)];
-    const r = count > 30 ? Math.random()*6+2 : Math.random()*4+1; // コンボ時は粒子大きめ
-    G.particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2.5,life:1,decay:Math.random()*0.03+0.015,r,color});
+    const color=colors[Math.floor(Math.random()*colors.length)];
+    const r=isCombo?Math.random()*6+2:Math.random()*4+1;
+    G.particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2.5,life:1,decay:Math.random()*0.03+0.015,r,color,shape:'spark'});
   }
+}
+
+// 後方互換: spawnParticlesはspawnEffectParticlesに委譲
+function spawnParticles(x, y, tileId, count=20) {
+  spawnEffectParticles(x, y, tileId, count > 30);
 }
 
 function updateParticles(ctx){
   G.particles=G.particles.filter(p=>p.life>0);
   for(const p of G.particles){
-    p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=p.decay;
-    ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color;
-    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    p.x+=p.vx; p.y+=p.vy;
+    // shape別の物理挙動
+    if(p.shape==='drop')  { p.vy+=0.3; }           // 落下は重力強め
+    else if(p.shape==='flash'){ p.vx*=0.85; p.vy*=0.85; } // フラッシュは減速
+    else                  { p.vy+=0.10; }           // 通常は軽い重力
+    p.life-=p.decay;
+    ctx.globalAlpha=Math.max(0,p.life);
+    ctx.fillStyle=p.color;
+    // shape別の描画
+    if(p.shape==='line'){
+      ctx.fillRect(p.x-p.r/2, p.y-p.r/2, p.r*3, p.r);
+    } else {
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    }
   }
   ctx.globalAlpha=1;
 }
@@ -1267,8 +1379,9 @@ function castSpell(){
   let healAmt=spell.heal>0?spell.heal+G.player.healBonus:0;
   const c=document.getElementById('battle-canvas');
   const cr=c.getBoundingClientRect();
-  const particleCount = isCombo ? 50 : 20;
-  spawnParticles(cr.width/2, cr.height*0.42, ids[0], particleCount);
+  // エフェクトキー: コンボのeffect優先（healも含む）、なければ属性カラー
+  const effectKey = (isCombo && spell.effect) ? spell.effect : ids[0];
+  spawnEffectParticles(cr.width/2, cr.height*0.42, effectKey, isCombo);
   if(healAmt>0) G.player.hp=Math.min(G.player.maxHp,G.player.hp+healAmt);
   G.enemy.hp=Math.max(0,G.enemy.hp-dmg);
   if(spell.effect&&spell.effect!=='heal'&&!G.enemyEffects.includes(spell.effect)) G.enemyEffects.push(spell.effect);
