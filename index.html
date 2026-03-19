@@ -339,6 +339,29 @@ html, body {
   transition:all 0.3s ease;
 }
 
+/* ── デッキ選択 ── */
+#screen-deck-select { justify-content:center; align-items:center; background:#0a0812; }
+.deck-select-content {
+  display:flex; flex-direction:column; align-items:center;
+  gap:16px; padding:24px 16px; width:100%; max-width:400px;
+}
+.deck-select-title { font-family:'Cinzel',serif; font-size:20px; color:var(--accent2); text-align:center; }
+.deck-select-sub   { font-size:13px; color:var(--text2); text-align:center; }
+.deck-cards        { display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; }
+.deck-card {
+  background:var(--panel); border:1.5px solid var(--border);
+  border-radius:12px; padding:14px 12px;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  cursor:pointer; touch-action:manipulation; transition:border-color 0.15s, box-shadow 0.15s;
+}
+.deck-card:active   { opacity:0.85; }
+.deck-card.selected { border-color:var(--accent); box-shadow:0 0 14px rgba(201,168,76,0.35); }
+.deck-card-icon  { font-size:28px; }
+.deck-card-name  { font-family:'Cinzel',serif; font-size:13px; color:var(--accent2); font-weight:700; }
+.deck-card-desc  { font-size:11px; color:var(--text2); text-align:center; line-height:1.4; }
+.deck-card-tiles { font-size:12px; color:var(--text); letter-spacing:0.05em; }
+.deck-card-combo { font-size:11px; color:var(--green); text-align:center; line-height:1.5; }
+
 /* ── ゲームオーバー・クリア ── */
 #screen-gameover, #screen-clear { position:relative; justify-content:center; align-items:center; }
 #gameover-canvas, #clear-canvas { position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
@@ -372,6 +395,17 @@ html, body {
     </div>
     <div class="best-score-row" id="title-best-scores"></div>
     <button id="btn-howto" class="btn-secondary">遊び方</button>
+  </div>
+</div>
+
+<!-- デッキ選択画面 -->
+<div id="screen-deck-select" class="screen">
+  <div class="deck-select-content">
+    <p class="deck-select-title">初期デッキを選択</p>
+    <p class="deck-select-sub">ランを通じて育てていくデッキの方向性を決めます</p>
+    <div class="deck-cards" id="deck-cards"></div>
+    <button id="btn-deck-select-go" class="btn-primary" style="max-width:220px">冒険を始める</button>
+    <button id="btn-deck-select-back" class="btn-secondary">戻る</button>
   </div>
 </div>
 
@@ -830,7 +864,37 @@ RF.Config = (() => {
   const DUNGEON_FLOORS = 8;
   const SHOP_PRICE     = 15;
   const MAX_SELECTED   = 3;
-  return { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS, ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED };
+
+  // ── スタートデッキプリセット ──
+  const DECK_PRESETS = [
+    {
+      id:'balanced', icon:'⚖️', name:'バランス',
+      desc:'全属性2枚。どんなコンボも狙える汎用構成。',
+      tiles:{ fire:2, water:2, wind:2, earth:2, light:2, dark:2 },
+      combo:'Holy Light / Flood / Boulder',
+    },
+    {
+      id:'aggro', icon:'🔥', name:'攻撃特化',
+      desc:'炎・闇を厚くした高火力構成。序盤から強力なコンボを狙う。',
+      tiles:{ fire:4, dark:3, earth:2, water:1, wind:1, light:1 },
+      combo:'Inferno / Hellfire / Boulder',
+    },
+    {
+      id:'sustain', icon:'💚', name:'回復特化',
+      desc:'光・水を厚くした持久型構成。長期戦に強く初心者にも向く。',
+      tiles:{ light:4, water:3, earth:2, fire:1, wind:1, dark:1 },
+      combo:'Holy Light / Flood / Cleanse',
+    },
+    {
+      id:'control', icon:'🌀', name:'妨害特化',
+      desc:'土・風を厚くした妨害構成。stun/slowで敵の攻撃を封じる。',
+      tiles:{ earth:4, wind:3, water:2, dark:1, fire:1, light:1 },
+      combo:'Boulder / Mud Trap / Gust',
+    },
+  ];
+
+  return { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS,
+           ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED, DECK_PRESETS };
 })();
 
 // ── RF.Effects: エフェクトシステム ───────────────────────────────
@@ -858,38 +922,72 @@ const { TILE_DEFS, PARTICLE_COLORS }                                            
 const { SPELL_COMBOS, COMBO_HINTS }                                               = RF.Spells;
 const { ENEMIES, BOSS_DEF, getBossAction }                                        = RF.Enemies;
 const { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS,
-        ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED }                    = RF.Config;
+        ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED, DECK_PRESETS }      = RF.Config;
 const { SPELL_EFFECTS }                                                           = RF.Effects;
 
 let G = {};
 let currentDifficulty = 'normal';
+let currentDeckPreset = localStorage.getItem('runefall_last_deck') || 'balanced';
 
-function initGame(diffKey = currentDifficulty) {
+// ── デッキ選択画面 ──
+function openDeckSelect(diffKey) {
   currentDifficulty = diffKey;
+  // カードを描画
+  const cont = document.getElementById('deck-cards');
+  cont.innerHTML = '';
+  DECK_PRESETS.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'deck-card' + (p.id === currentDeckPreset ? ' selected' : '');
+    card.innerHTML = `
+      <span class="deck-card-icon">${p.icon}</span>
+      <span class="deck-card-name">${p.name}</span>
+      <span class="deck-card-desc">${p.desc}</span>
+      <span class="deck-card-tiles">${Object.entries(p.tiles).map(([id,n])=>
+        TILE_DEFS.find(t=>t.id===id)?.icon.repeat(n)).join('')}</span>
+      <span class="deck-card-combo">▶ ${p.combo}</span>
+    `;
+    card.onclick = () => {
+      currentDeckPreset = p.id;
+      cont.querySelectorAll('.deck-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+    };
+    cont.appendChild(card);
+  });
+  showScreen('deck-select');
+}
+
+function initGame(diffKey = currentDifficulty, deckPresetId = currentDeckPreset) {
+  currentDifficulty  = diffKey;
+  currentDeckPreset  = deckPresetId;
+  localStorage.setItem('runefall_last_deck', deckPresetId);
   const d = DIFFICULTIES[diffKey] || DIFFICULTIES.normal;
   G = {
     screen:'title',
     floor:1,
     difficulty: diffKey,
     diffConf: d,
+    deckPreset: deckPresetId,
     player:{ hp:d.playerHp, maxHp:d.playerHp, gold:0, atkBonus:0, healBonus:0, goldRate:d.goldMult, handSize:d.handSize },
     upgradeLevels:{ hp_up:0, atk_up:0, heal_up:0, gold_up:0, hand_up:0 },
-    deck: buildStartDeck(),
+    deck: buildStartDeck(deckPresetId),
     hand:[], selected:[], enemy:null, enemyEffects:[],
     dungeon:generateDungeon(), currentRoom:null,
     animating:false, particles:[],
     mapRooms:[], mapCurrentIdx:0,
     totalTurns:0,
     spellComboBonus:{},
-    // ⑤ 統計カウンタ
     totalDmg:0, totalHealed:0, comboCount:{},
   };
 }
 
-function buildStartDeck() {
-  const d = [];
-  for (const t of TILE_DEFS) d.push({...t},{...t});
-  return shuffle(d);
+function buildStartDeck(presetId = 'balanced') {
+  const preset = DECK_PRESETS.find(p => p.id === presetId) || DECK_PRESETS[0];
+  const deck = [];
+  for (const [tileId, count] of Object.entries(preset.tiles)) {
+    const tileDef = TILE_DEFS.find(t => t.id === tileId);
+    if (tileDef) for (let i = 0; i < count; i++) deck.push({...tileDef});
+  }
+  return shuffle(deck);
 }
 
 function shuffle(arr) {
@@ -943,11 +1041,12 @@ RF.Screen = (() => {
     onScreenEnter(id);
   }
   function onScreenEnter(id) {
-    if (id==='title')    { initTitleCanvas(); updateTitleBestScores(); }
-    if (id==='map')      renderMap();
-    if (id==='battle')   enterBattle();
-    if (id==='gameover') initGameoverCanvas();
-    if (id==='clear')    initClearCanvas();
+    if (id==='title')       { initTitleCanvas(); updateTitleBestScores(); }
+    if (id==='deck-select') { /* openDeckSelectで描画済み */ }
+    if (id==='map')         renderMap();
+    if (id==='battle')      enterBattle();
+    if (id==='gameover')    initGameoverCanvas();
+    if (id==='clear')       initClearCanvas();
   }
   function initTitleCanvas() {
     if (titleRaf) { cancelAnimationFrame(titleRaf); titleRaf=null; }
@@ -1893,10 +1992,14 @@ function renderStatsExtra(containerId) {
 document.addEventListener('DOMContentLoaded', () => {
   initGame();
 
-  // 難易度選択ボタン（タイトル画面）
-  document.getElementById('btn-easy').onclick   = () => { initGame('easy');   showScreen('map'); };
-  document.getElementById('btn-normal').onclick = () => { initGame('normal'); showScreen('map'); };
-  document.getElementById('btn-hard').onclick   = () => { initGame('hard');   showScreen('map'); };
+  // 難易度選択 → デッキ選択画面へ
+  document.getElementById('btn-easy').onclick   = () => openDeckSelect('easy');
+  document.getElementById('btn-normal').onclick = () => openDeckSelect('normal');
+  document.getElementById('btn-hard').onclick   = () => openDeckSelect('hard');
+
+  // デッキ選択画面
+  document.getElementById('btn-deck-select-go').onclick   = () => { initGame(currentDifficulty, currentDeckPreset); showScreen('map'); };
+  document.getElementById('btn-deck-select-back').onclick = () => showScreen('title');
 
   document.getElementById('btn-howto').onclick      = () => showScreen('howto');
   document.getElementById('btn-howto-back').onclick = () => showScreen('title');
@@ -1915,9 +2018,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-event-accept').onclick  = () => { if(currentEvent) currentEvent.onAccept(G); };
   document.getElementById('btn-event-decline').onclick = () => showScreen('map');
 
-  document.getElementById('btn-retry').onclick      = () => { initGame(); showScreen('map'); };
+  document.getElementById('btn-retry').onclick      = () => openDeckSelect(currentDifficulty);
   document.getElementById('btn-title').onclick      = () => showScreen('title');
-  document.getElementById('btn-clear-retry').onclick= () => { initGame(); showScreen('map'); };
+  document.getElementById('btn-clear-retry').onclick= () => openDeckSelect(currentDifficulty);
   document.getElementById('btn-clear-title').onclick= () => showScreen('title');
 
   showScreen('title');
