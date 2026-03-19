@@ -366,18 +366,23 @@ html, body {
 .deck-card.locked .deck-card-name { color:var(--text2); }
 
 /* ── 実績タブ ── */
+.ach-tab-bar-wrap {
+  flex-shrink:0; border-bottom:1px solid var(--border);
+}
 .ach-tab-bar {
-  flex-shrink:0; display:flex; background:var(--panel);
-  border-bottom:1px solid var(--border); overflow-x:auto;
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  background:var(--panel);
+  max-width:480px; width:100%; margin:0 auto;
 }
 .ach-tab {
-  flex:1; min-width:52px; padding:9px 4px; text-align:center;
+  padding:8px 4px; text-align:center;
   font-family:'Cinzel',serif; font-size:11px; color:var(--text2);
   cursor:pointer; background:transparent; border:none;
   letter-spacing:0.03em; touch-action:manipulation;
   border-bottom:2px solid transparent; white-space:nowrap;
 }
-.ach-tab.active { color:var(--accent2); border-bottom-color:var(--accent); }
+.ach-tab.active { color:var(--accent2); border-bottom-color:var(--accent); background:var(--panel2); }
 .ach-tab-content { display:none; flex-direction:column; gap:8px; padding-top:8px; }
 .ach-tab-content.active { display:flex; }
 /* achievements-listのdisplayをach-tab-contentが上書きできるよう分離 */
@@ -457,7 +462,9 @@ html, body {
   </div>
 
   <!-- タブバー -->
-  <div class="ach-tab-bar" id="ach-tab-bar"></div>
+  <div class="ach-tab-bar-wrap">
+    <div class="ach-tab-bar" id="ach-tab-bar"></div>
+  </div>
 
   <!-- タブコンテンツ -->
   <div class="page-scroll">
@@ -1100,7 +1107,12 @@ function renderAchievements() {
     cont.id = 'ach-content-'+tab.id;
 
     if (tab.type === 'unlock') {
-      META_UNLOCKS.forEach(u => {
+      // 未解放を上・解放済みを下
+      const sorted = [...META_UNLOCKS].sort((a,b) => {
+        const ua = unlocked.includes(a.id), ub = unlocked.includes(b.id);
+        return ua === ub ? 0 : ua ? 1 : -1;
+      });
+      sorted.forEach(u => {
         const isUnlocked = unlocked.includes(u.id);
         const el = document.createElement('div');
         el.className = 'achievement-item ' + (isUnlocked?'unlocked':'locked');
@@ -1114,7 +1126,12 @@ function renderAchievements() {
         cont.appendChild(el);
       });
     } else {
-      tab.items.forEach(a => {
+      // 未達成を上・達成済みを下
+      const sorted = [...tab.items].sort((a,b) => {
+        const aa = achieved.includes(a.id), ab = achieved.includes(b.id);
+        return aa === ab ? 0 : aa ? 1 : -1;
+      });
+      sorted.forEach(a => {
         const isAchieved = achieved.includes(a.id);
         const el = document.createElement('div');
         el.className = 'achievement-item ' + (isAchieved?'unlocked':'locked');
@@ -1920,8 +1937,8 @@ RF.Meta = (() => {
     { id:'reach_f4',          cat:'進行', icon:'🗺️', name:'中層突破',     cond:'F4以上に到達' },
     { id:'reach_f7',          cat:'進行', icon:'🏔️', name:'最終層',       cond:'F7以上に到達' },
     { id:'clear_easy',        cat:'進行', icon:'⭐', name:'初クリア',     cond:'EASYクリア' },
-    { id:'clear_normal',      cat:'進行', icon:'⭐⭐', name:'真のクリア',   cond:'NORMALクリア' },
-    { id:'clear_hard',        cat:'進行', icon:'⭐⭐⭐', name:'深淵制覇',     cond:'HARDクリア' },
+    { id:'clear_normal',      cat:'進行', icon:'⭐', name:'真のクリア',   cond:'NORMALクリア' },
+    { id:'clear_hard',        cat:'進行', icon:'⭐', name:'深淵制覇',     cond:'HARDクリア' },
     { id:'runs_5',            cat:'進行', icon:'🎒', name:'冒険者',       cond:'累計5ラン' },
     { id:'runs_20',           cat:'進行', icon:'🧭', name:'ベテラン',     cond:'累計20ラン' },
     { id:'runs_50',           cat:'進行', icon:'👑', name:'伝説の冒険者', cond:'累計50ラン' },
