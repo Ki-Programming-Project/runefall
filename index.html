@@ -10,7 +10,7 @@
 // キャッシュ対策: バージョン番号が一致しない場合は強制リロード
 // 更新時はAPP_VERSIONの値を変更するだけでスマホ含む全端末に新版が配信される
 (function() {
-  var APP_VERSION = '1.7.0';
+  var APP_VERSION = '1.7.1';
   var key = 'runefall_version';
   var stored = localStorage.getItem(key);
   if (stored !== APP_VERSION) {
@@ -1084,7 +1084,7 @@ const { SPELL_COMBOS, COMBO_HINTS }                                             
 const { ENEMIES, BOSS_DEF, getBossAction }                                        = RF.Enemies;
 const { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS,
         ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED,
-        DECK_PRESETS, META_UNLOCKS }                                               = RF.Config;
+        DECK_PRESETS }                                                             = RF.Config;
 const { SPELL_EFFECTS }                                                           = RF.Effects;
 
 let G = {};
