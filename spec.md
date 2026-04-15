@@ -4,7 +4,7 @@
 
 スマートフォンブラウザ向けローグライクパズルゲーム。単一HTMLファイル（index.html）で完結。外部ライブラリなし。
 
-- **バージョン**: APP_VERSION = '1.7.2'
+- **バージョン**: APP_VERSION = '1.7.3'
 - **ゲームループ**: タイトル → 難易度選択 → デッキ選択 → マップ（8フロア） → 戦闘/イベント/ショップ/休憩/宝箱 → 報酬 → 繰り返し → ボス戦 → クリア/ゲームオーバー
 - **ゴール**: F8のボス（魔竜）を倒してクリア
 
@@ -459,6 +459,10 @@ if (rank.effect === 'combo_xp_bonus') { ... }
 // getRankEffects()は自動的に新effectを返す（他の変更不要）
 ```
 
+> **注意**: `metaBossPreview` は現在 `runefall_meta_xp >= 50`（Rank2以上）で有効化している。
+> 将来 RANKSに `effect:'boss_preview'` を追加する場合は `initGame` の該当行を
+> `rankEffects.includes('boss_preview')` に戻すこと。
+
 ### 9.4 実績追加手順
 
 ```javascript
@@ -498,18 +502,20 @@ if (newRaf) { cancelAnimationFrame(newRaf); newRaf=null; }
 | 優先度 | 内容 |
 |--------|------|
 | 高 | ~~`deck_chaos_clear` / `deck_ancient_clear` の達成判定：確認済み・実装正常~~ ✅ |
-| 中 | VOIDベストスコアをタイトル画面・実績画面に表示（`runefall_best_void` はすでに保存済み。`updateTitleBestScores` と `renderAchievements` に追記するだけ） |
-| 中 | `metaBossPreview` の動的ボス次アクション予告（現在は固定文字列。`getBossAction` の返値を利用して次ターン行動を表示） |
+| ~~中~~ | ~~VOIDベストスコアをタイトル画面・実績画面に表示~~ ✅（タイトルは既存実装、実績画面に`#achievements-void-best`追加） |
+| ~~中~~ | ~~`metaBossPreview` の動的ボス次アクション予告（固定文字列→`peekBossAction`による動的表示）~~ ✅ |
 | ~~中~~ | ~~ショップ価格の最小値ガード：`Math.max(1, price)` で0G以下になるケースを防止~~ ✅ |
 | ~~低~~ | ~~`score_2000` の `cat` が `'戦略'` になっているが `'スコア'` が正しい~~ ✅ |
-| 中 | 「竜の知識」の動的ボス予告（現在は固定文字列） |
+| ~~中~~ | ~~「竜の知識」の動的ボス予告（固定文字列→動的表示）~~ ✅（上記と統合済み） |
 | 低 | PWA対応（manifest.json / Service Worker） |
 | 低 | フロア数拡張（8→10〜12） |
 | 低 | 新敵の追加（後半フロアの多様性向上） |
 | 低 | 案C：呪い・祝福システム |
 | 低 | 案D：ミニボス追加（F4・F6） |
 | 低 | ランク拡張（Rank8〜10候補はコメントで保持済み） |
-| 低 | VOID難易度のベストスコアを実績画面・タイトルに明示表示 |
+| 中 | クリア画面のスコアボード（`renderScoreBoard`）にVOIDベストスコアを追記 |
+| 中 | ボス戦中の次ターン予告を専用UIエリアに常時表示（現状はトーストで消える） |
+| 低 | `peekBossAction` の激怒後行動予告の精度向上（enraged状態でのbranch最適化） |
 
 ---
 

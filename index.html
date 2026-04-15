@@ -10,7 +10,7 @@
 // キャッシュ対策: バージョン番号が一致しない場合は強制リロード
 // 更新時はAPP_VERSIONの値を変更するだけでスマホ含む全端末に新版が配信される
 (function() {
-  var APP_VERSION = '1.7.2';
+  var APP_VERSION = '1.7.3';
   var key = 'runefall_version';
   var stored = localStorage.getItem(key);
   if (stored !== APP_VERSION) {
@@ -481,6 +481,7 @@ html, body {
       <div class="meta-xp-bar-wrap"><div id="achievements-xp-bar" class="meta-xp-bar" style="width:0%"></div></div>
       <div id="achievements-xp-next" style="font-size:11px;color:var(--text2);margin-top:3px"></div>
       <div id="achievements-summary" style="font-size:11px;color:var(--accent);margin-top:4px"></div>
+      <div id="achievements-void-best" style="font-size:11px;color:#cc88ff;margin-top:2px;display:none"></div>
     </div>
   </div>
 
@@ -865,7 +866,14 @@ RF.Enemies = (() => {
     }
     return { type:'normal' };
   }
-  return { ENEMIES, BOSS_DEF, getBossAction };
+  // 副作用なし・次ターン行動予測（予告表示専用）
+  function peekBossAction(hp, maxHp, turn, enraged) {
+    if (hp / maxHp <= 0.4 && !enraged) return { type:'enrage' };
+    if (turn > 0 && turn % 3 === 0) return { type:'breath' };
+    if (turn > 0 && turn % 5 === 0) return { type:'roar' };
+    return { type:'normal' };
+  }
+  return { ENEMIES, BOSS_DEF, getBossAction, peekBossAction };
 })();
 
 // ── RF.Config: ゲーム設定・難易度・強化・イベント・定数 ──────────
@@ -1081,7 +1089,7 @@ RF.Effects = (() => {
 // 例: import { TILE_DEFS, PARTICLE_COLORS } from './data/tiles.js';
 const { TILE_DEFS, PARTICLE_COLORS }                                              = RF.Tiles;
 const { SPELL_COMBOS, COMBO_HINTS }                                               = RF.Spells;
-const { ENEMIES, BOSS_DEF, getBossAction }                                        = RF.Enemies;
+const { ENEMIES, BOSS_DEF, getBossAction, peekBossAction }                        = RF.Enemies;
 const { DIFFICULTIES, UPGRADE_DEFS, RANDOM_EVENTS, TUTORIAL_STEPS,
         ROOM_TYPES, DUNGEON_FLOORS, SHOP_PRICE, MAX_SELECTED,
         DECK_PRESETS }                                                             = RF.Config;
@@ -1112,6 +1120,19 @@ function renderAchievements() {
   document.getElementById('achievements-summary').textContent =
     '🎖️ Rank' + curRank.rank + '「' + curRank.title + '」　実績 ' + doneAch + '/' + totalAch +
     '（' + Math.floor(doneAch/totalAch*100) + '%）';
+
+  const rankEffects = getRankEffects(totalXp);
+  const voidUnlocked = rankEffects.includes('diff_void') || achieved.includes('clear_hard');
+  const voidBest = parseInt(localStorage.getItem('runefall_best_void') || '0');
+  const voidEl = document.getElementById('achievements-void-best');
+  if (voidEl) {
+    if (voidUnlocked && voidBest > 0) {
+      voidEl.textContent = '👁️ VOIDベスト: ' + voidBest.toLocaleString() + ' pt';
+      voidEl.style.display = '';
+    } else {
+      voidEl.style.display = 'none';
+    }
+  }
 
   const cats = [...new Set(ACHIEVEMENTS.map(a => a.cat))];
   const tabs = [
@@ -1277,7 +1298,7 @@ function initGame(diffKey = currentDifficulty, deckPresetId = currentDeckPreset)
     // ランク永続強化フラグ（rankEffectsから）
     metaRestBonus:    rankEffects.includes('rest_bonus_5') ? 5 : 0,
     metaShopDiscount: rankEffects.includes('shop_discount') ? 3 : 0,
-    metaBossPreview:  rankEffects.includes('boss_preview'),
+    metaBossPreview:  parseInt(localStorage.getItem('runefall_meta_xp')||'0') >= 50,
     metaShopChoices:  rankEffects.includes('shop_choice_5') ? 5 : 4,
   };
   // 初期Gold加算（ランク+実績）
@@ -1602,12 +1623,14 @@ function enterBattle() {
     // ボス戦前：回復の泉（HP+50 + 実績ボーナス）
     const bossHeal = 50 + (G.achEffects?.bossHealBonus || 0);
     G.player.hp = Math.min(G.player.maxHp, G.player.hp + bossHeal);
-    // 竜の知識: 最初の特殊行動を予告
+    // 竜の知識: 次ターン行動を動的予告（ボス出現時はturn=0なので次はturn=1）
     if (G.metaBossPreview) {
-      const preview = G.enemy?.turn === 0
-        ? 'ボス最初の行動: 3T目に炎の息吹、HP40%以下で激怒'
-        : null;
-      if (preview) setTimeout(() => showToast(`🐉 ${preview}`, 4000), 600);
+      const peek = peekBossAction(base.maxHp, base.maxHp, 1, false);
+      const msg = peek.type === 'enrage' ? '次の行動: 激怒（攻撃力大幅上昇）'
+                : peek.type === 'breath' ? '次の行動: 炎の息吹（高ダメージ＋火傷）'
+                : peek.type === 'roar'   ? '次の行動: 咆哮（手牌シャッフル）'
+                :                          '次の行動: 通常攻撃';
+      setTimeout(() => showToast(`🐉 ${msg}`, 4000), 600);
     }
   } else {
     const f=G.floor;
@@ -1995,6 +2018,14 @@ function enemyAttack(){
     if(G.player.hp<=0){
       playSE('gameover');
       setTimeout(()=>{ if(battleRaf){cancelAnimationFrame(battleRaf);battleRaf=null;} showScreen('gameover'); },400);
+    } else if(G.metaBossPreview) {
+      const nextT = G.enemy.turn + 1;
+      const peek = peekBossAction(G.enemy.hp, G.enemy.maxHp, nextT, G.enemy.enraged);
+      const msg = peek.type === 'enrage' ? '次の行動: 激怒（攻撃力大幅上昇）'
+                : peek.type === 'breath' ? '次の行動: 炎の息吹（高ダメージ＋火傷）'
+                : peek.type === 'roar'   ? '次の行動: 咆哮（手牌シャッフル）'
+                :                          '次の行動: 通常攻撃';
+      setTimeout(() => showToast(`🐉 ${msg}`, 3000), 400);
     }
     return;
   }
